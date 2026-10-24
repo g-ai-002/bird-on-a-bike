@@ -67,7 +67,6 @@ class _GamePageState extends State<GamePage> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final provider = context.read<GameProvider>();
     final game = _game;
     if (game == null) {
       return const SizedBox.shrink();

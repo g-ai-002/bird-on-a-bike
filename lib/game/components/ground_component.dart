@@ -23,7 +23,7 @@ class GroundComponent extends SceneLayerComponent {
 
   @override
   void render(Canvas canvas) {
-    final top = AppConstants.groundY;
+    const top = AppConstants.groundY;
     canvas.drawRect(
       Rect.fromLTWH(
         0,

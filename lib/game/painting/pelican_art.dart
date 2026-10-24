@@ -507,7 +507,7 @@ void _paintMagnet(Canvas canvas, RideLook look) {
     ..color = RideColors.magnet.withValues(alpha: 0.55)
     ..style = PaintingStyle.stroke
     ..strokeWidth = 2;
-  final center = const Offset(84, 82);
+  const center = Offset(84, 82);
   for (var i = 0; i < 2; i++) {
     final radius = 54.0 + i * 10 + math.sin(look.wingPhase * 2) * 2;
     canvas.drawArc(

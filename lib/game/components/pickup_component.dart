@@ -141,7 +141,6 @@ class PickupComponent extends SceneLayerComponent {
       ..arcToPoint(
         const Offset(7, 2),
         radius: const Radius.circular(7),
-        clockwise: true,
       )
       ..lineTo(7, -9);
     canvas.drawPath(

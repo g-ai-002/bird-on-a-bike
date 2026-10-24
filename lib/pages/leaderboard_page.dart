@@ -40,8 +40,6 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('排行榜'),
@@ -85,7 +83,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
                   : ListView.separated(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       itemCount: _entries.length,
-                      separatorBuilder: (_, __) =>
+                      separatorBuilder: (_, _) =>
                           const Divider(height: 1, indent: 72),
                       itemBuilder: (context, index) {
                         final entry = _entries[index];
