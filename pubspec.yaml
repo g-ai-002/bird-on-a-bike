@@ -1,0 +1,28 @@
+name: bird_on_a_bike
+description: 鹈鹕骑单车 - 海风横版骑行躲避小游戏
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.13.5 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flame: 1.38.2
+  provider: 6.1.5+1
+  shared_preferences: 2.5.6
+  path_provider: 2.1.6
+  path: 1.9.1
+  window_manager: 0.5.2
+  audioplayers: 6.8.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 6.0.0
+
+flutter:
+  uses-material-design: true
