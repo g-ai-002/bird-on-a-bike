@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter_scene/scene.dart';
 
 import '../../services/log_service.dart';
+import '../../utils/constants.dart';
 import '../scene3d/ride_scene.dart';
 import 'scene_layer_component.dart';
 
@@ -44,6 +45,14 @@ class Scene3DComponent extends SceneLayerComponent {
   void render(Canvas canvas) {
     final ride = _rideScene;
     if (ride == null) return;
-    ride.render(canvas, Rect.fromLTWH(0, 0, width, height));
+    final dpr =
+        PlatformDispatcher.instance.implicitView?.devicePixelRatio ?? 1.0;
+    final gameWidth = findGame()?.size.x ?? AppConstants.worldWidth;
+    final fit = gameWidth > 0 ? gameWidth / AppConstants.worldWidth : 1.0;
+    ride.render(
+      canvas,
+      Rect.fromLTWH(0, 0, width, height),
+      pixelRatio: dpr * fit,
+    );
   }
 }

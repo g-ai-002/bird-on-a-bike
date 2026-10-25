@@ -1,5 +1,5 @@
 import 'dart:math' as math;
-import 'dart:ui' show Canvas, Color, PlatformDispatcher, Rect;
+import 'dart:ui' show Canvas, Color, Rect;
 
 import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;
@@ -75,6 +75,7 @@ class RideScene {
   late final PhysicallyBasedMaterial _metalMat;
   late final PhysicallyBasedMaterial _beakDarkMat;
   late final PhysicallyBasedMaterial _pouchDarkMat;
+  late final PhysicallyBasedMaterial _grassMat;
   late final UnlitMaterial _sunMat;
   late final UnlitMaterial _shadowMat;
   late final UnlitMaterial _fishMat;
@@ -104,6 +105,8 @@ class RideScene {
   late final Node _shieldRing;
   late final Node _magnetRing;
   late final Node _riderShadow;
+  late final Node _rearWheel;
+  late final Node _frontWheel;
   late final Node _crankArmA;
   late final Node _crankArmB;
   late final Node _pedalA;
@@ -139,11 +142,15 @@ class RideScene {
 
     _createAssets();
 
-    final dpr =
-        PlatformDispatcher.instance.implicitView?.devicePixelRatio ?? 1.0;
     scene
-      ..antiAliasingMode = AntiAliasingMode.fxaa
-      ..renderScale = dpr >= 2.0 ? 0.85 : 1.0;
+      ..antiAliasingMode = AntiAliasingMode.auto
+      ..renderScale = 1.0
+      ..toneMapping = ToneMappingMode.aces;
+    scene.renderQuality
+      ..tier = RenderQualityTier.high
+      ..adaptive = true
+      ..targetFrameRate = 60
+      ..minRenderScale = 0.7;
 
     final sky = GradientSkySource(
       zenithColor: _linear3(RideColors.skyTop),
@@ -160,7 +167,15 @@ class RideScene {
       intensity: 1.2,
       shadowMaxDistance: 120,
     );
-    scene.exposure = 1.1;
+    scene.exposure = 1.12;
+    scene.fog
+      ..enabled = true
+      ..mode = FogMode.linear
+      ..color = _linear3(RideColors.skyMid)
+      ..start = 70
+      ..end = 200
+      ..maxOpacity = 0.45
+      ..cutoffDistance = 220;
 
     _buildBackdrop();
     _buildStage();
@@ -196,15 +211,8 @@ class RideScene {
     scene.update(dt);
   }
 
-  void render(Canvas canvas, Rect viewport) {
-    final dpr =
-        PlatformDispatcher.instance.implicitView?.devicePixelRatio ?? 1.0;
-    scene.render(
-      camera,
-      canvas,
-      viewport: viewport,
-      pixelRatio: math.min(dpr, 1.5),
-    );
+  void render(Canvas canvas, Rect viewport, {required double pixelRatio}) {
+    scene.render(camera, canvas, viewport: viewport, pixelRatio: pixelRatio);
   }
 
   /// 相机随速度后拉、随跳跃抬高视线，并保留一点海浪般的横向漂移。
@@ -232,30 +240,30 @@ class RideScene {
 
   void _createAssets() {
     _cube = CuboidGeometry(vm.Vector3(1, 1, 1));
-    _cylinder = CylinderGeometry(radialSegments: 20);
-    _cone = CylinderGeometry(topRadius: 0, radialSegments: 16);
-    _sphere = SphereGeometry(radius: 1, segments: 20, rings: 14);
+    _cylinder = CylinderGeometry(radialSegments: 24);
+    _cone = CylinderGeometry(topRadius: 0, radialSegments: 20);
+    _sphere = SphereGeometry(radius: 1, segments: 28, rings: 18);
     _ring = TorusGeometry(
       radius: 1,
       tubeRadius: 0.12,
-      radialSegments: 24,
-      tubularSegments: 8,
+      radialSegments: 36,
+      tubularSegments: 10,
     );
     _rimRing = TorusGeometry(
       radius: 1,
       tubeRadius: 0.04,
-      radialSegments: 24,
-      tubularSegments: 6,
+      radialSegments: 36,
+      tubularSegments: 8,
     );
     _thinRing = TorusGeometry(
       radius: 1,
       tubeRadius: 0.02,
-      radialSegments: 24,
-      tubularSegments: 6,
+      radialSegments: 36,
+      tubularSegments: 8,
     );
-    _disc = DiscGeometry(radius: 1, segments: 28);
+    _disc = DiscGeometry(radius: 1, segments: 36);
     _rock = IcosphereGeometry(radius: 1, subdivisions: 1);
-    _bill = CylinderGeometry(topRadius: 0.12, radialSegments: 16);
+    _bill = CylinderGeometry(topRadius: 0.12, radialSegments: 20);
 
     _roadMat = _pbr(RideColors.road, roughness: 0.95);
     _sandMat = _pbr(const Color(0xFFB98A5A), roughness: 0.95);
@@ -288,6 +296,7 @@ class RideScene {
     _metalMat = _pbr(const Color(0xFFB8C2C8), roughness: 0.35, metallic: 0.8);
     _beakDarkMat = _pbr(const Color(0xFFD97A1E), roughness: 0.5);
     _pouchDarkMat = _pbr(const Color(0xFFE08A2E), roughness: 0.75);
+    _grassMat = _pbr(const Color(0xFF7A9A5A), roughness: 0.95);
     _sunMat = _unlit(RideColors.sun);
     _shadowMat = _unlit(const Color(0xFF2A2A2A));
     _fishMat = _unlit(RideColors.fish);
@@ -318,6 +327,8 @@ class RideScene {
     _buildClouds();
     _buildHills();
     _buildWaves();
+    _buildSun();
+    _buildShoreProps();
   }
 
   void _buildClouds() {
@@ -347,16 +358,17 @@ class RideScene {
       _HillSeed(18, 48, 14, 11),
       _HillSeed(40, 56, 26, 15),
     ];
-    for (final hill in hills) {
-      scene.add(
-        _node(
-          _cone,
-          _hillMat,
-          position: vm.Vector3(hill.x, hill.height / 2 - 2.4, hill.z),
-          scale: vm.Vector3(hill.radius, hill.height, hill.radius * 0.7),
-        ),
-      );
-    }
+    scene.add(
+      _mergedNode(<Node>[
+        for (final hill in hills)
+          _node(
+            _cone,
+            _hillMat,
+            position: vm.Vector3(hill.x, hill.height / 2 - 2.4, hill.z),
+            scale: vm.Vector3(hill.radius, hill.height, hill.radius * 0.7),
+          ),
+      ]),
+    );
   }
 
   void _buildWaves() {
@@ -386,6 +398,73 @@ class RideScene {
         ),
       );
     }
+  }
+
+  void _buildSun() {
+    scene.add(
+      _node(
+        _sphere,
+        _sunMat,
+        position: vm.Vector3(30, 28, 246),
+        scale: vm.Vector3(8, 8, 0.3),
+      ),
+    );
+  }
+
+  void _buildShoreProps() {
+    final parts = <Node>[];
+    const stones = <double>[-52, -38, -24, -9, 6, 21, 36, 50];
+    for (var i = 0; i < stones.length; i++) {
+      final size = 0.45 + (i % 3) * 0.22;
+      parts.add(
+        _node(
+          _rock,
+          i.isEven ? _rockLightMat : _rockDarkMat,
+          position: vm.Vector3(stones[i], size * 0.35, 5.55 + (i % 2) * 0.12),
+          scale: vm.Vector3(size, size * 0.7, size),
+        ),
+      );
+    }
+    for (var i = 0; i < 18; i++) {
+      final height = 1.1 + (i % 4) * 0.35;
+      parts.add(
+        _node(
+          _cone,
+          _grassMat,
+          position: vm.Vector3(-62 + i * 7.3, height / 2, 5.72 + (i % 3) * 0.1),
+          scale: vm.Vector3(0.16, height, 0.16),
+          rotation: vm.Quaternion.axisAngle(_zAxis, (i % 5 - 2) * 0.08),
+        ),
+      );
+    }
+
+    parts.addAll(<Node>[
+      _box(vm.Vector3(6.5, 1.0, 2.2), _bannerPoleMat, vm.Vector3(24, -2.1, 80)),
+      _rod(
+        vm.Vector3(24, -1.7, 80),
+        vm.Vector3(24, 7.2, 80),
+        0.09,
+        _bannerPoleMat,
+      ),
+      _node(
+        _cone,
+        _whiteMat,
+        position: vm.Vector3(24.6, 4.4, 80),
+        scale: vm.Vector3(1.9, 4.6, 0.18),
+      ),
+    ]);
+    scene.add(_mergedNode(parts));
+  }
+
+  Node _mergedNode(Iterable<Node> parts) {
+    final root = Node()..addAll(parts);
+    return _nodeFromMeshes(_mergeNodeMeshes(root));
+  }
+
+  void _addMerged(Node parent, Iterable<Node> parts) {
+    final list = parts.toList(growable: false);
+    if (list.isEmpty) return;
+    parent.add(_mergedNode(list));
   }
 
   // ---------------------------------------------------------------------------
@@ -573,6 +652,31 @@ class RideScene {
     _shieldRing.visible = false;
     _magnetRing.visible = false;
     _rider.addAll([_magnetRing, _shieldRing]);
+
+    final animated = <Node>{
+      _rearWheel,
+      _frontWheel,
+      _torso,
+      _crankArmA,
+      _crankArmB,
+      _pedalA,
+      _pedalB,
+      _footA,
+      _footB,
+      _legNearUpper,
+      _legNearLower,
+      _legFarUpper,
+      _legFarLower,
+      _shieldRing,
+      _magnetRing,
+    };
+    final staticParts = _rider.children
+        .where((child) => !animated.contains(child))
+        .toList();
+    for (final part in staticParts) {
+      _rider.remove(part);
+    }
+    _addMerged(_rider, staticParts);
   }
 
   Node _buildWheel({required bool front}) {
@@ -581,6 +685,11 @@ class RideScene {
       ..rotation = vm.Quaternion.axisAngle(_xAxis, math.pi / 2);
     final spin = Node();
     root.add(spin);
+    if (front) {
+      _frontWheel = root;
+    } else {
+      _rearWheel = root;
+    }
 
     spin.add(_node(_ring, _tyreMat, scale: vm.Vector3.all(2.35)));
     spin.add(_node(_rimRing, _rimMat, scale: vm.Vector3.all(1.8)));
@@ -594,6 +703,12 @@ class RideScene {
       spin.add(spoke);
     }
     spin.add(_node(_sphere, _frameMat, scale: vm.Vector3.all(0.4)));
+
+    final parts = spin.children.toList();
+    for (final part in parts) {
+      spin.remove(part);
+    }
+    _addMerged(spin, parts);
 
     _rider.add(root);
     return spin;
@@ -880,6 +995,15 @@ class RideScene {
         ),
       );
     }
+
+    final animated = <Node>{_nearWing, _farWing, _scarf};
+    final staticParts = _torso.children
+        .where((child) => !animated.contains(child))
+        .toList();
+    for (final part in staticParts) {
+      _torso.remove(part);
+    }
+    _addMerged(_torso, staticParts);
   }
 
   // ---------------------------------------------------------------------------
