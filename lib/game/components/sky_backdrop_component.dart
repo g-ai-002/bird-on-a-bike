@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui';
+import 'dart:ui' as ui;
 
 import '../../utils/constants.dart';
 import '../iso_projection.dart';
@@ -52,12 +53,61 @@ class SkyBackdropComponent extends SceneLayerComponent {
       ..strokeCap = StrokeCap.round;
   });
 
+  /// 静态层的栅格化倍率：远景都是低频渐变，1.5 倍已足够，
+  /// 换来的是每帧只做一次贴图采样，不再重复计算大面积渐变。
+  static const double _rasterScale = 1.5;
+
+  /// 天空+落日与灯塔+海面各自的世界范围。
+  ///
+  /// 天空裁到海面之上、海面从灯塔光束顶端开始，避免两张贴图都覆盖整幅画面；
+  /// 被裁掉的部分原本也会被海面或路面盖住，视觉上没有差别。
+  static const Rect _skyRegion = Rect.fromLTWH(
+    0,
+    0,
+    AppConstants.worldWidth,
+    170,
+  );
+  static const Rect _seaRegion = Rect.fromLTWH(
+    0,
+    78,
+    AppConstants.worldWidth,
+    AppConstants.worldHeight - 78,
+  );
+
   Picture? _skyPicture;
-  Picture? _sunPicture;
   Picture? _seaPicture;
-  Picture? _lighthousePicture;
+  ui.Image? _skyImage;
+  ui.Image? _seaImage;
+  final Paint _imagePaint = Paint()..filterQuality = FilterQuality.low;
 
   double _elapsed = 0;
+
+  @override
+  Future<void> onLoad() async {
+    _skyPicture = _recordRegion(_skyRegion, (canvas) {
+      _paintSky(canvas);
+      _paintSun(canvas);
+    });
+    _seaPicture = _recordRegion(_seaRegion, (canvas) {
+      _paintLighthouse(canvas);
+      _paintSea(canvas);
+    });
+    _skyImage = _rasterize(_skyPicture!, _skyRegion);
+    _seaImage = _rasterize(_seaPicture!, _seaRegion);
+  }
+
+  @override
+  void onRemove() {
+    _skyImage?.dispose();
+    _seaImage?.dispose();
+    _skyPicture?.dispose();
+    _seaPicture?.dispose();
+    _skyImage = null;
+    _seaImage = null;
+    _skyPicture = null;
+    _seaPicture = null;
+    super.onRemove();
+  }
 
   @override
   void update(double dt) {
@@ -69,32 +119,58 @@ class SkyBackdropComponent extends SceneLayerComponent {
 
   @override
   void render(Canvas canvas) {
-    _ensureStatic();
     final state = provider.state;
     final travel = IsoProjection.travelPixels(state.distance);
 
-    canvas.drawPicture(_skyPicture!);
-    canvas.drawPicture(_sunPicture!);
+    _drawStaticLayer(canvas, _skyImage, _skyPicture!, _skyRegion);
     _paintClouds(canvas, travel);
     _paintRidges(canvas, travel);
-    canvas.drawPicture(_lighthousePicture!);
-    canvas.drawPicture(_seaPicture!);
+    _drawStaticLayer(canvas, _seaImage, _seaPicture!, _seaRegion);
     _paintWaveGlints(canvas, travel);
   }
 
-  void _ensureStatic() {
-    if (_skyPicture != null) return;
-    _skyPicture = _record(_paintSky);
-    _sunPicture = _record(_paintSun);
-    _seaPicture = _record(_paintSea);
-    _lighthousePicture = _record(_paintLighthouse);
-  }
-
-  Picture _record(void Function(Canvas canvas) painter) {
+  /// 在 [region] 里录制静态层：先按栅格倍率放大，再平移到区域左上角。
+  Picture _recordRegion(Rect region, void Function(Canvas canvas) painter) {
     final recorder = PictureRecorder();
     final canvas = Canvas(recorder);
+    canvas.scale(_rasterScale);
+    canvas.translate(-region.left, -region.top);
     painter(canvas);
     return recorder.endRecording();
+  }
+
+  ui.Image? _rasterize(Picture picture, Rect region) {
+    try {
+      return picture.toImageSync(
+        (region.width * _rasterScale).round(),
+        (region.height * _rasterScale).round(),
+      );
+    } catch (_) {
+      // Web 的 HTML 渲染器不支持 toImageSync，退回每帧绘制矢量 Picture。
+      return null;
+    }
+  }
+
+  void _drawStaticLayer(
+    Canvas canvas,
+    ui.Image? image,
+    Picture picture,
+    Rect region,
+  ) {
+    if (image != null) {
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        region,
+        _imagePaint,
+      );
+      return;
+    }
+    canvas.save();
+    canvas.translate(region.left, region.top);
+    canvas.scale(1 / _rasterScale);
+    canvas.drawPicture(picture);
+    canvas.restore();
   }
 
   void _paintSky(Canvas canvas) {

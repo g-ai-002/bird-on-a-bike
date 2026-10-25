@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui';
+import 'dart:ui' as ui;
 
 import 'package:flame/components.dart';
 import 'package:flame/rendering.dart';
@@ -31,8 +32,7 @@ class RideEntitiesComponent extends SceneLayerComponent {
   );
   final Paint _shadowPaint = Paint()..color = const Color(0x55202426);
   final Paint _riderShadowPaint = Paint();
-  final Paint _pickupGlow = Paint();
-  final Map<PickupKind, Shader> _glowShaders = <PickupKind, Shader>{};
+  final Paint _glowPaint = Paint()..filterQuality = FilterQuality.low;
 
   /// 每帧复用同一份列表，避免在渲染循环里反复分配。
   final List<Obstacle> _sortedObstacles = <Obstacle>[];
@@ -42,6 +42,12 @@ class RideEntitiesComponent extends SceneLayerComponent {
       <ObstacleKind, List<BakedSprite>>{};
   final Map<PickupKind, BakedSprite> _pickupSprites =
       <PickupKind, BakedSprite>{};
+  final Map<PickupKind, ui.Image> _glowImages = <PickupKind, ui.Image>{};
+
+  /// 骑行者的静态层：车身一张，鹈鹕按站姿/俯身各一张。
+  late final Picture _bikePicture;
+  late final Picture _pelicanStand;
+  late final Picture _pelicanDuck;
 
   double _elapsed = 0;
   double _wheelAngle = 0;
@@ -49,6 +55,9 @@ class RideEntitiesComponent extends SceneLayerComponent {
 
   @override
   void onLoad() {
+    _bikePicture = _recordRiderLayer(paintRiderBikeStatic);
+    _pelicanStand = _recordRiderBody(ducking: false);
+    _pelicanDuck = _recordRiderBody(ducking: true);
     for (final kind in ObstacleKind.values) {
       _obstacleSprites[kind] = <BakedSprite>[
         for (var variant = 0; variant < 2; variant++)
@@ -65,7 +74,54 @@ class RideEntitiesComponent extends SceneLayerComponent {
         painter: (canvas, size) => PropArt.paintPickup(canvas, size, kind),
         anchorY: 0.5,
       );
+      _glowImages[kind] = _bakeGlow(kind);
     }
+  }
+
+  /// 在骑行者的美术坐标系里录制一张静态层。
+  Picture _recordRiderLayer(void Function(Canvas canvas) painter) {
+    final recorder = PictureRecorder();
+    final canvas = Canvas(recorder);
+    applyRiderArtTransform(canvas, kRiderArtSize);
+    painter(canvas);
+    return recorder.endRecording();
+  }
+
+  Picture _recordRiderBody({required bool ducking}) {
+    return _recordRiderLayer(
+      (canvas) => paintRiderBodyStatic(canvas, ducking: ducking),
+    );
+  }
+
+  /// 拾取物光晕烘焙成 2 倍位图：径向渐变只算一次，之后每帧只做一次采样。
+  ui.Image _bakeGlow(PickupKind kind) {
+    const logical = 48.0;
+    const scale = 2.0;
+    final recorder = PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.scale(scale);
+    canvas.translate(logical / 2, logical / 2);
+    final color = pickupColor(kind);
+    canvas.drawCircle(
+      Offset.zero,
+      24,
+      Paint()
+        ..shader = Gradient.radial(
+          Offset.zero,
+          24,
+          <Color>[
+            color.withValues(alpha: 0.32),
+            color.withValues(alpha: 0),
+          ],
+        ),
+    );
+    final picture = recorder.endRecording();
+    final image = picture.toImageSync(
+      (logical * scale).round(),
+      (logical * scale).round(),
+    );
+    picture.dispose();
+    return image;
   }
 
   @override
@@ -78,6 +134,12 @@ class RideEntitiesComponent extends SceneLayerComponent {
     for (final sprite in _pickupSprites.values) {
       sprite.dispose();
     }
+    for (final image in _glowImages.values) {
+      image.dispose();
+    }
+    _bikePicture.dispose();
+    _pelicanStand.dispose();
+    _pelicanDuck.dispose();
     super.onRemove();
   }
 
@@ -188,20 +250,6 @@ class RideEntitiesComponent extends SceneLayerComponent {
     sprite.render(canvas, anchor, rotation: sway);
   }
 
-  Shader _glowShader(PickupKind kind) {
-    return _glowShaders.putIfAbsent(kind, () {
-      final color = pickupColor(kind);
-      return Gradient.radial(
-        Offset.zero,
-        24,
-        <Color>[
-          color.withValues(alpha: 0.32),
-          color.withValues(alpha: 0),
-        ],
-      );
-    });
-  }
-
   void _paintPickup(Canvas canvas, Pickup pickup) {
     final sprite = _pickupSprites[pickup.kind];
     if (sprite == null) return;
@@ -209,11 +257,15 @@ class RideEntitiesComponent extends SceneLayerComponent {
     final bob = math.sin(_elapsed * 2.6 + pickup.phase) * 3.4;
     final center = base + Offset(0, -bob);
 
-    canvas.save();
-    canvas.translate(center.dx, center.dy);
-    _pickupGlow.shader = _glowShader(pickup.kind);
-    canvas.drawCircle(Offset.zero, 24, _pickupGlow);
-    canvas.restore();
+    final glow = _glowImages[pickup.kind];
+    if (glow != null) {
+      canvas.drawImageRect(
+        glow,
+        Rect.fromLTWH(0, 0, glow.width.toDouble(), glow.height.toDouble()),
+        Rect.fromCenter(center: center, width: 48, height: 48),
+        _glowPaint,
+      );
+    }
 
     final pulse = 1 + math.sin(_elapsed * 3.1 + pickup.phase) * 0.04;
     final tilt = pickup.kind == PickupKind.fish
@@ -245,7 +297,18 @@ class RideEntitiesComponent extends SceneLayerComponent {
       ..center = Vector2(0, -kRiderArtSize.height * 0.42);
     _riderTilt.applyChain((tilted) {
       tilted.translate(-kRiderArtSize.width / 2, -kRiderArtSize.height);
-      paintPelicanRider(tilted, kRiderArtSize, look);
+      applyRiderArtTransform(tilted, kRiderArtSize);
+      // 动态层与静态层交错绘制，保持车轮/曲柄/腿被车身遮住的层次。
+      paintRiderSpeedMarks(tilted, look);
+      paintRiderWheels(tilted, look);
+      tilted.drawPicture(_bikePicture);
+      paintRiderCranks(tilted, look);
+      paintRiderLegs(tilted, look);
+      tilted.drawPicture(look.ducking ? _pelicanDuck : _pelicanStand);
+      paintRiderWing(tilted, look);
+      paintRiderScarf(tilted, look);
+      paintRiderPedals(tilted, look);
+      paintRiderEffects(tilted, look);
     }, canvas);
     canvas.restore();
   }

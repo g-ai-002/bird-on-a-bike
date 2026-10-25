@@ -30,30 +30,48 @@ const Size kRiderArtSize = Size(170, 130);
 const Offset _crankCenter = Offset(84, 104);
 const double _crankRadius = 13;
 
-/// 在 [size] 内绘制鹈鹕与自行车，底部居中对齐。
-void paintPelicanRider(Canvas canvas, Size size, RideLook look) {
+/// 把画布变换到 [kRiderArtSize] 的本地坐标系（底部居中对齐）。
+///
+/// 组件在加载时用同一次变换烘焙静态层，运行时只需调用一次本函数；
+/// 后续各 `paintRider*` 画法都假设画布已处于该坐标系。
+void applyRiderArtTransform(Canvas canvas, Size size) {
   final scale = math.min(
     size.width / kRiderArtSize.width,
     size.height / kRiderArtSize.height,
   );
-  final dx = (size.width - kRiderArtSize.width * scale) / 2;
-  final dy = size.height - kRiderArtSize.height * scale;
-
-  canvas.save();
-  canvas.translate(dx, dy);
+  canvas.translate(
+    (size.width - kRiderArtSize.width * scale) / 2,
+    size.height - kRiderArtSize.height * scale,
+  );
   canvas.scale(scale);
+}
 
-  _paintSpeedMarks(canvas, look);
-  _paintBike(canvas, look);
-  _paintPelican(canvas, look);
-  _paintPedals(canvas, look);
-  if (look.shield) _paintShield(canvas, look);
-  if (look.magnet) _paintMagnet(canvas, look);
-
+/// 一帧完整的鹈鹕与自行车：按前后遮挡关系逐层绘制。
+///
+/// 渲染组件会把静态层换成加载时烘焙好的 [Picture]，这里保留完整流程，
+/// 供测试与单帧离屏渲染使用。
+void paintPelicanRider(Canvas canvas, Size size, RideLook look) {
+  canvas.save();
+  applyRiderArtTransform(canvas, size);
+  paintRiderSpeedMarks(canvas, look);
+  paintRiderWheels(canvas, look);
+  paintRiderBikeStatic(canvas);
+  paintRiderCranks(canvas, look);
+  paintRiderLegs(canvas, look);
+  paintRiderBodyStatic(canvas, ducking: look.ducking);
+  paintRiderWing(canvas, look);
+  paintRiderScarf(canvas, look);
+  paintRiderPedals(canvas, look);
+  paintRiderEffects(canvas, look);
   canvas.restore();
 }
 
-void _paintSpeedMarks(Canvas canvas, RideLook look) {
+// ---------------------------------------------------------------------------
+// 分层画法：静态层可烘焙成 Picture，动态层每帧重绘
+// ---------------------------------------------------------------------------
+
+/// 空中的速度线，只在腾空时出现。
+void paintRiderSpeedMarks(Canvas canvas, RideLook look) {
   if (!look.airborne) return;
   final paint = Paint()
     ..color = Colors.white.withValues(alpha: 0.55)
@@ -64,6 +82,189 @@ void _paintSpeedMarks(Canvas canvas, RideLook look) {
     final length = 16.0 - i * 3;
     canvas.drawLine(Offset(6, y), Offset(6 + length, y), paint);
   }
+}
+
+/// 两个车轮：随车轮角度转动，画在车架之下。
+void paintRiderWheels(Canvas canvas, RideLook look) {
+  _paintWheel(canvas, _rearWheel, look.wheelAngle);
+  _paintWheel(canvas, _frontWheel, look.wheelAngle);
+}
+
+/// 车身静态层：链条、车架、手柄、坐垫、车筐与露出的鱼尾。
+///
+/// 与姿态、车轮角度都无关，因此可在加载时烘焙一次。
+void paintRiderBikeStatic(Canvas canvas) {
+  final chain = Paint()
+    ..color = RideColors.tyre.withValues(alpha: 0.6)
+    ..strokeWidth = 2;
+  canvas.drawLine(
+    _rearWheel + const Offset(0, 5),
+    _crankCenter + const Offset(0, 5),
+    chain,
+  );
+  canvas.drawLine(
+    _rearWheel + const Offset(0, -5),
+    _crankCenter + const Offset(0, -5),
+    chain,
+  );
+
+  final frame = Paint()
+    ..color = RideColors.frame
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 5
+    ..strokeCap = StrokeCap.round
+    ..strokeJoin = StrokeJoin.round;
+
+  final framePath = Path()
+    ..moveTo(_rearWheel.dx, _rearWheel.dy)
+    ..lineTo(_seat.dx, _seat.dy)
+    ..lineTo(_headTube.dx, _headTube.dy)
+    ..lineTo(_frontWheel.dx, _frontWheel.dy)
+    ..moveTo(_crankCenter.dx, _crankCenter.dy)
+    ..lineTo(_seat.dx, _seat.dy)
+    ..moveTo(_crankCenter.dx, _crankCenter.dy)
+    ..lineTo(_headTube.dx, _headTube.dy)
+    ..moveTo(_rearWheel.dx, _rearWheel.dy)
+    ..lineTo(_crankCenter.dx, _crankCenter.dy);
+  canvas.drawPath(framePath, frame);
+
+  final handlePaint = Paint()
+    ..color = RideColors.frameDark
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 4
+    ..strokeCap = StrokeCap.round;
+  canvas.drawPath(
+    Path()
+      ..moveTo(_headTube.dx, _headTube.dy)
+      ..lineTo(_handle.dx - 4, _handle.dy)
+      ..lineTo(_handle.dx + 3, _handle.dy),
+    handlePaint,
+  );
+
+  final saddle = Paint()
+    ..color = RideColors.tyre
+    ..strokeWidth = 6
+    ..strokeCap = StrokeCap.round;
+  canvas.drawLine(const Offset(63, 64), const Offset(80, 63), saddle);
+
+  // 车头小篮子与露出的鱼尾
+  canvas.drawRRect(
+    RRect.fromRectAndRadius(
+      const Rect.fromLTWH(116, 62, 22, 16),
+      const Radius.circular(3),
+    ),
+    Paint()
+      ..color = RideColors.crate
+      ..style = PaintingStyle.fill,
+  );
+  final basketLine = Paint()
+    ..color = RideColors.crateDark
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.2;
+  for (var i = 1; i < 3; i++) {
+    canvas.drawLine(
+      Offset(116 + i * 7.0, 63),
+      Offset(116 + i * 7.0, 77),
+      basketLine,
+    );
+  }
+  canvas.drawPath(
+    Path()
+      ..moveTo(130, 62)
+      ..lineTo(138, 54)
+      ..lineTo(140, 61)
+      ..lineTo(136, 63)
+      ..close(),
+    Paint()..color = RideColors.fish,
+  );
+}
+
+/// 牙盘与曲柄臂，夹在车身与腿之间。
+void paintRiderCranks(Canvas canvas, RideLook look) {
+  _paintCrankArms(canvas, _crankCenter, look.wheelAngle);
+}
+
+/// 鹈鹕静态层：尾、身体、脖子、头、喙与眼睛。
+///
+/// 只与站姿/俯身两种姿态有关，因此每种姿态烘焙一张。
+void paintRiderBodyStatic(Canvas canvas, {required bool ducking}) {
+  final bodyCenter = _bodyCenterFor(ducking);
+  final bodyRadius = _bodyRadiusFor(ducking);
+  final headCenter = _headCenterFor(ducking);
+  final headRadius = _headRadiusFor(ducking);
+
+  _paintTail(canvas, bodyCenter, ducking);
+
+  canvas.drawOval(
+    Rect.fromCenter(
+      center: bodyCenter,
+      width: bodyRadius.width * 2,
+      height: bodyRadius.height * 2,
+    ),
+    Paint()..color = RideColors.pelican,
+  );
+
+  canvas.drawOval(
+    Rect.fromCenter(
+      center: bodyCenter + Offset(0, bodyRadius.height * 0.45),
+      width: bodyRadius.width * 1.5,
+      height: bodyRadius.height * 0.7,
+    ),
+    Paint()..color = RideColors.pelicanShade,
+  );
+
+  _paintNeck(canvas, bodyCenter, headCenter, ducking);
+
+  canvas.drawCircle(
+    headCenter,
+    headRadius,
+    Paint()..color = RideColors.pelican,
+  );
+
+  _paintBeak(canvas, _beakBaseFor(ducking), _beakTipFor(ducking), ducking);
+
+  final eyeCenter = headCenter + const Offset(4.5, -3.2);
+  canvas.drawCircle(eyeCenter, 2.6, Paint()..color = RideColors.eye);
+  canvas.drawCircle(
+    eyeCenter + const Offset(1.0, -1.0),
+    0.9,
+    Paint()..color = Colors.white,
+  );
+
+  canvas.drawLine(
+    headCenter + Offset(-2, -headRadius + 1),
+    headCenter + Offset(-6, -headRadius - 5),
+    Paint()
+      ..color = RideColors.pelican
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round,
+  );
+}
+
+/// 扇动的翅膀，画在身体之上。
+void paintRiderWing(Canvas canvas, RideLook look) {
+  _paintWing(canvas, look, _bodyCenterFor(look.ducking), look.ducking);
+}
+
+/// 围巾与飘尾，随扇翅相位轻微摆动。
+void paintRiderScarf(Canvas canvas, RideLook look) {
+  _paintScarf(canvas, look, _headCenterFor(look.ducking), look.ducking);
+}
+
+/// 双腿：蹼足跟随踏板位置踩踏。
+void paintRiderLegs(Canvas canvas, RideLook look) {
+  _paintLegs(canvas, _hipFor(look.ducking), look);
+}
+
+/// 踏板画在腿之上，避免被蹼足盖住。
+void paintRiderPedals(Canvas canvas, RideLook look) {
+  _paintPedals(canvas, look);
+}
+
+/// 护盾与磁铁光环。
+void paintRiderEffects(Canvas canvas, RideLook look) {
+  if (look.shield) _paintShield(canvas, look);
+  if (look.magnet) _paintMagnet(canvas, look);
 }
 
 void _paintWheel(Canvas canvas, Offset center, double angle) {
@@ -95,105 +296,33 @@ void _paintWheel(Canvas canvas, Offset center, double angle) {
   canvas.drawCircle(center, 4.5, Paint()..color = RideColors.frame);
 }
 
-void _paintBike(Canvas canvas, RideLook look) {
-  const rear = Offset(50, 104);
-  const front = Offset(128, 104);
-  const crank = Offset(84, 104);
-  const seat = Offset(72, 66);
-  const head = Offset(112, 68);
-  const handle = Offset(127, 55);
+/// 车架上的固定锚点：后轮、前轮、坐垫、头管与车把。
+const Offset _rearWheel = Offset(50, 104);
+const Offset _frontWheel = Offset(128, 104);
+const Offset _seat = Offset(72, 66);
+const Offset _headTube = Offset(112, 68);
+const Offset _handle = Offset(127, 55);
 
-  _paintWheel(canvas, rear, look.wheelAngle);
-  _paintWheel(canvas, front, look.wheelAngle);
+/// 站立与俯身两套姿态锚点，静态层与动态层共用。
+Offset _bodyCenterFor(bool ducking) =>
+    ducking ? const Offset(98, 90) : const Offset(88, 55);
 
-  final chain = Paint()
-    ..color = RideColors.tyre.withValues(alpha: 0.6)
-    ..strokeWidth = 2;
-  canvas.drawLine(
-    rear + const Offset(0, 5),
-    crank + const Offset(0, 5),
-    chain,
-  );
-  canvas.drawLine(
-    rear + const Offset(0, -5),
-    crank + const Offset(0, -5),
-    chain,
-  );
+Size _bodyRadiusFor(bool ducking) =>
+    ducking ? const Size(29, 15) : const Size(27, 21);
 
-  final frame = Paint()
-    ..color = RideColors.frame
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 5
-    ..strokeCap = StrokeCap.round
-    ..strokeJoin = StrokeJoin.round;
+Offset _headCenterFor(bool ducking) =>
+    ducking ? const Offset(124, 74) : const Offset(111, 31);
 
-  final framePath = Path()
-    ..moveTo(rear.dx, rear.dy)
-    ..lineTo(seat.dx, seat.dy)
-    ..lineTo(head.dx, head.dy)
-    ..lineTo(front.dx, front.dy)
-    ..moveTo(crank.dx, crank.dy)
-    ..lineTo(seat.dx, seat.dy)
-    ..moveTo(crank.dx, crank.dy)
-    ..lineTo(head.dx, head.dy)
-    ..moveTo(rear.dx, rear.dy)
-    ..lineTo(crank.dx, crank.dy);
-  canvas.drawPath(framePath, frame);
+double _headRadiusFor(bool ducking) => ducking ? 10.0 : 12.0;
 
-  final handlePaint = Paint()
-    ..color = RideColors.frameDark
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 4
-    ..strokeCap = StrokeCap.round;
-  canvas.drawPath(
-    Path()
-      ..moveTo(head.dx, head.dy)
-      ..lineTo(handle.dx - 4, handle.dy)
-      ..lineTo(handle.dx + 3, handle.dy),
-    handlePaint,
-  );
+Offset _beakBaseFor(bool ducking) =>
+    ducking ? const Offset(129, 67) : const Offset(117, 26);
 
-  final saddle = Paint()
-    ..color = RideColors.tyre
-    ..strokeWidth = 6
-    ..strokeCap = StrokeCap.round;
-  canvas.drawLine(const Offset(63, 64), const Offset(80, 63), saddle);
+Offset _beakTipFor(bool ducking) =>
+    ducking ? const Offset(166, 81) : const Offset(158, 37);
 
-  // 车头小篮子与露出的鱼尾
-  final basket = Paint()
-    ..color = RideColors.crate
-    ..style = PaintingStyle.fill;
-  canvas.drawRRect(
-    RRect.fromRectAndRadius(
-      const Rect.fromLTWH(116, 62, 22, 16),
-      const Radius.circular(3),
-    ),
-    basket,
-  );
-  final basketLine = Paint()
-    ..color = RideColors.crateDark
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 1.2;
-  for (var i = 1; i < 3; i++) {
-    canvas.drawLine(
-      Offset(116 + i * 7.0, 63),
-      Offset(116 + i * 7.0, 77),
-      basketLine,
-    );
-  }
-  final fishTail = Paint()..color = RideColors.fish;
-  canvas.drawPath(
-    Path()
-      ..moveTo(130, 62)
-      ..lineTo(138, 54)
-      ..lineTo(140, 61)
-      ..lineTo(136, 63)
-      ..close(),
-    fishTail,
-  );
-
-  _paintCrankArms(canvas, crank, look.wheelAngle);
-}
+Offset _hipFor(bool ducking) =>
+    ducking ? const Offset(92, 84) : const Offset(86, 68);
 
 /// 牙盘与两根曲柄臂：画在车身层，随后被腿和踏板覆盖出前后关系。
 void _paintCrankArms(Canvas canvas, Offset crank, double angle) {
@@ -218,67 +347,6 @@ void _paintCrankArms(Canvas canvas, Offset crank, double angle) {
       ..strokeWidth = 1.1,
   );
   canvas.drawCircle(crank, 4.4, Paint()..color = RideColors.frameDark);
-}
-
-void _paintPelican(Canvas canvas, RideLook look) {
-  final ducking = look.ducking;
-  final bodyCenter = ducking ? const Offset(98, 90) : const Offset(88, 55);
-  final bodyRadius = ducking ? const Size(29, 15) : const Size(27, 21);
-  final headCenter = ducking ? const Offset(124, 74) : const Offset(111, 31);
-  final headRadius = ducking ? 10.0 : 12.0;
-  final beakBase = ducking ? const Offset(129, 67) : const Offset(117, 26);
-  final beakTip = ducking ? const Offset(166, 81) : const Offset(158, 37);
-  final hip = ducking ? const Offset(92, 84) : const Offset(86, 68);
-
-  _paintLegs(canvas, hip, look);
-  _paintTail(canvas, bodyCenter, ducking);
-
-  final body = Paint()..color = RideColors.pelican;
-  canvas.drawOval(
-    Rect.fromCenter(
-      center: bodyCenter,
-      width: bodyRadius.width * 2,
-      height: bodyRadius.height * 2,
-    ),
-    body,
-  );
-
-  final shade = Paint()..color = RideColors.pelicanShade;
-  canvas.drawOval(
-    Rect.fromCenter(
-      center: bodyCenter + Offset(0, bodyRadius.height * 0.45),
-      width: bodyRadius.width * 1.5,
-      height: bodyRadius.height * 0.7,
-    ),
-    shade,
-  );
-
-  _paintWing(canvas, look, bodyCenter, ducking);
-  _paintNeck(canvas, look, bodyCenter, headCenter, ducking);
-
-  final head = Paint()..color = RideColors.pelican;
-  canvas.drawCircle(headCenter, headRadius, head);
-
-  _paintBeak(canvas, beakBase, beakTip, ducking);
-
-  final eye = Paint()..color = RideColors.eye;
-  final glint = Paint()..color = Colors.white;
-  // 眼睛贴近喙一侧，让视线朝向前进方向。
-  final eyeCenter = headCenter + const Offset(4.5, -3.2);
-  canvas.drawCircle(eyeCenter, 2.6, eye);
-  canvas.drawCircle(eyeCenter + const Offset(1.0, -1.0), 0.9, glint);
-
-  final crest = Paint()
-    ..color = RideColors.pelican
-    ..strokeWidth = 2.4
-    ..strokeCap = StrokeCap.round;
-  canvas.drawLine(
-    headCenter + Offset(-2, -headRadius + 1),
-    headCenter + Offset(-6, -headRadius - 5),
-    crest,
-  );
-
-  _paintScarf(canvas, look, headCenter, ducking);
 }
 
 void _paintTail(Canvas canvas, Offset bodyCenter, bool ducking) {
@@ -341,7 +409,6 @@ void _paintWing(
 
 void _paintNeck(
   Canvas canvas,
-  RideLook look,
   Offset bodyCenter,
   Offset headCenter,
   bool ducking,
