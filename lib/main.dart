@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
@@ -41,6 +42,13 @@ Future<void> main() async {
   final storage = await StorageService.instance;
   await LogService.init(logRoot: FileSystemService.instance.getLogRoot);
   LogService.info('应用启动: ${AppConstants.appName} v${AppConstants.version}');
+
+  // 菜单等页面跟随设备方向；进入游玩页后由 GamePage 锁定横屏。
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+    DeviceOrientation.portraitUp,
+  ]);
 
   AudioService().setMuted(storage.muted);
   runApp(BirdOnABikeApp(storage: storage));

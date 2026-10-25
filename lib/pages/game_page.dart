@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flame/game.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../game/bike_game.dart';
@@ -11,6 +14,11 @@ import '../game/ride_style.dart';
 import '../models/game_state.dart';
 import '../providers/game_provider.dart';
 import '../providers/settings_provider.dart';
+import '../utils/constants.dart';
+
+/// 桌面端使用键盘与窗口；手机、平板进入游玩页后锁定横屏并沉浸全屏。
+bool get _isMobile =>
+    !Platform.isWindows && !Platform.isMacOS && !Platform.isLinux;
 
 class GamePage extends StatefulWidget {
   const GamePage({super.key});
@@ -29,6 +37,13 @@ class _GamePageState extends State<GamePage> {
   @override
   void initState() {
     super.initState();
+    if (_isMobile) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _gameFocusNode.requestFocus();
@@ -54,6 +69,17 @@ class _GamePageState extends State<GamePage> {
 
   @override
   void dispose() {
+    if (_isMobile) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+        DeviceOrientation.portraitUp,
+      ]);
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: SystemUiOverlay.values,
+      );
+    }
     _gameFocusNode.dispose();
     super.dispose();
   }
@@ -66,12 +92,41 @@ class _GamePageState extends State<GamePage> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     final game = _game;
     if (game == null) {
       return const SizedBox.shrink();
     }
+    return _isMobile ? _buildImmersive(game) : _buildDesktop(game);
+  }
 
+  Widget _buildGameWidget(BikeGame game) {
+    return GameWidget<BikeGame>(
+      game: game,
+      focusNode: _gameFocusNode,
+      overlayBuilderMap: {
+        BikeGame.pauseOverlayId: (_, BikeGame game) => PauseOverlay(
+              provider: game.provider,
+              onResume: () {
+                game.provider.togglePause();
+                _gameFocusNode.requestFocus();
+              },
+            ),
+        BikeGame.countdownOverlayId: (_, BikeGame game) => CountdownOverlay(
+              countdown: game.countdown,
+            ),
+        BikeGame.gameOverOverlayId: (_, BikeGame game) => GameOverOverlay(
+              provider: game.provider,
+              onRestart: () {
+                game.provider.start();
+                _gameFocusNode.requestFocus();
+              },
+            ),
+      },
+    );
+  }
+
+  Widget _buildDesktop(BikeGame game) {
+    final colors = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -159,32 +214,7 @@ class _GamePageState extends State<GamePage> {
                             aspectRatio: 16 / 9,
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(10),
-                              child: GameWidget<BikeGame>(
-                                game: game,
-                                focusNode: _gameFocusNode,
-                                overlayBuilderMap: {
-                                  BikeGame.pauseOverlayId: (_, BikeGame game) =>
-                                      PauseOverlay(
-                                        provider: game.provider,
-                                        onResume: () {
-                                          game.provider.togglePause();
-                                          _gameFocusNode.requestFocus();
-                                        },
-                                      ),
-                                  BikeGame.countdownOverlayId:
-                                      (_, BikeGame game) => CountdownOverlay(
-                                            countdown: game.countdown,
-                                          ),
-                                  BikeGame.gameOverOverlayId:
-                                      (_, BikeGame game) => GameOverOverlay(
-                                            provider: game.provider,
-                                            onRestart: () {
-                                              game.provider.start();
-                                              _gameFocusNode.requestFocus();
-                                            },
-                                          ),
-                                },
-                              ),
+                              child: _buildGameWidget(game),
                             ),
                           ),
                         ),
@@ -279,6 +309,210 @@ class _GamePageState extends State<GamePage> {
       ),
     );
   }
+
+  /// 手机横屏全屏布局：画布按 16:9 居中，状态与按钮浮在顶部两角。
+  Widget _buildImmersive(BikeGame game) {
+    final colors = Theme.of(context).colorScheme;
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Listener(
+              onPointerDown: (_) => _focusGame(),
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio:
+                      AppConstants.worldWidth / AppConstants.worldHeight,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: _buildGameWidget(game),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Consumer<GameProvider>(
+                      builder: (context, game, _) {
+                        final state = game.state;
+                        return _hudPanel(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _circleNavButton(
+                                Icons.arrow_back,
+                                () => Navigator.pop(context),
+                              ),
+                              const SizedBox(height: 10),
+                              _hudText(
+                                '得分 ${state.score}',
+                                color: colors.primary,
+                              ),
+                              _hudText('距离 ${state.distance.floor()} m'),
+                              _hudText(
+                                '最高 ${state.highScore}',
+                                color: colors.onSurfaceVariant,
+                                fontSize: 12,
+                              ),
+                              _hudText(
+                                '小鱼 ${state.fish}',
+                                color: colors.onSurfaceVariant,
+                              ),
+                              if (state.combo > 1)
+                                _hudText(
+                                  '连击 ×${state.combo}',
+                                  color: colors.secondary,
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    Consumer<GameProvider>(
+                      builder: (context, game, _) {
+                        final state = game.state;
+                        final chips = <Widget>[
+                          if (state.hasShield)
+                            _EffectChip(
+                              icon: Icons.shield_outlined,
+                              label: '护盾 ×${state.shieldCharges}',
+                              color: RideColors.shield,
+                            ),
+                          if (state.magnetActive)
+                            _EffectChip(
+                              icon: Icons.attractions,
+                              label: '磁铁 ${state.magnetRemaining.ceil()}s',
+                              color: RideColors.magnet,
+                            ),
+                        ];
+                        final showPause = game.isPlaying || game.isPaused;
+                        if (!showPause && chips.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        return _hudPanel(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (showPause)
+                                _circleNavButton(
+                                  game.isPaused
+                                      ? Icons.play_arrow
+                                      : Icons.pause,
+                                  game.togglePause,
+                                ),
+                              if (showPause && chips.isNotEmpty)
+                                const SizedBox(height: 10),
+                              ...chips,
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 8,
+            child: SafeArea(
+              top: false,
+              child: IgnorePointer(
+                child: Consumer<GameProvider>(
+                  builder: (context, game, _) {
+                    if (!game.isPlaying && !game.isPaused) {
+                      return const SizedBox.shrink();
+                    }
+                    return Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colors.surface.withValues(alpha: 0.8),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: colors.outline),
+                        ),
+                        child: Text(
+                          '点击跳跃（可二段跳）· 下滑俯身 · 右上角暂停',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: colors.onSurfaceVariant,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _hudPanel({required Widget child}) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: colors.surface.withValues(alpha: 0.86),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.outline),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _hudText(
+    String text, {
+    Color? color,
+    double fontSize = 14,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color ?? colors.onSurface,
+          fontSize: fontSize,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _circleNavButton(IconData icon, VoidCallback onPressed) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: colors.surfaceContainerHighest,
+        border: Border.all(color: colors.outline),
+      ),
+      child: IconButton(
+        icon: Icon(icon, color: colors.onSurface, size: 22),
+        onPressed: onPressed,
+      ),
+    );
+  }
 }
 
 class _EffectChip extends StatelessWidget {
@@ -294,10 +528,11 @@ class _EffectChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.32),
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: color.withValues(alpha: 0.6)),
       ),
@@ -310,7 +545,7 @@ class _EffectChip extends StatelessWidget {
             label,
             style: TextStyle(
               fontSize: 11,
-              color: color,
+              color: colors.onSurface,
               fontWeight: FontWeight.w600,
             ),
           ),
