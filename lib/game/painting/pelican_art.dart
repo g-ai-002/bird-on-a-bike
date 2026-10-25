@@ -26,6 +26,10 @@ class RideLook {
 /// 逻辑画布尺寸（宽 × 高），车轮底部对齐画布底边。
 const Size kRiderArtSize = Size(170, 130);
 
+/// 曲柄中心与踏板旋转半径。
+const Offset _crankCenter = Offset(84, 104);
+const double _crankRadius = 13;
+
 /// 在 [size] 内绘制鹈鹕与自行车，底部居中对齐。
 void paintPelicanRider(Canvas canvas, Size size, RideLook look) {
   final scale = math.min(
@@ -42,6 +46,7 @@ void paintPelicanRider(Canvas canvas, Size size, RideLook look) {
   _paintSpeedMarks(canvas, look);
   _paintBike(canvas, look);
   _paintPelican(canvas, look);
+  _paintPedals(canvas, look);
   if (look.shield) _paintShield(canvas, look);
   if (look.magnet) _paintMagnet(canvas, look);
 
@@ -187,36 +192,32 @@ void _paintBike(Canvas canvas, RideLook look) {
     fishTail,
   );
 
-  _paintCrank(canvas, crank, look.wheelAngle);
+  _paintCrankArms(canvas, crank, look.wheelAngle);
 }
 
-void _paintCrank(Canvas canvas, Offset crank, double angle) {
-  final arm = Paint()
-    ..color = RideColors.tyre
-    ..strokeWidth = 3
-    ..strokeCap = StrokeCap.round;
-  final pedal = Paint()..color = RideColors.frameDark;
-
-  final a = Offset(math.cos(angle), math.sin(angle)) * 13;
+/// 牙盘与两根曲柄臂：画在车身层，随后被腿和踏板覆盖出前后关系。
+void _paintCrankArms(Canvas canvas, Offset crank, double angle) {
+  final a = Offset(math.cos(angle), math.sin(angle)) * _crankRadius;
   final b = Offset(-a.dx, -a.dy);
 
+  final arm = Paint()
+    ..color = RideColors.frameDark
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3.2
+    ..strokeCap = StrokeCap.round;
   canvas.drawLine(crank, crank + a, arm);
   canvas.drawLine(crank, crank + b, arm);
-  canvas.drawRRect(
-    RRect.fromRectAndRadius(
-      Rect.fromCenter(center: crank + a, width: 9, height: 4),
-      const Radius.circular(2),
-    ),
-    pedal,
+
+  canvas.drawCircle(crank, 8, Paint()..color = RideColors.tyre);
+  canvas.drawCircle(
+    crank,
+    8,
+    Paint()
+      ..color = RideColors.pelican.withValues(alpha: 0.55)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.1,
   );
-  canvas.drawRRect(
-    RRect.fromRectAndRadius(
-      Rect.fromCenter(center: crank + b, width: 9, height: 4),
-      const Radius.circular(2),
-    ),
-    pedal,
-  );
-  canvas.drawCircle(crank, 5, Paint()..color = RideColors.frame);
+  canvas.drawCircle(crank, 4.4, Paint()..color = RideColors.frameDark);
 }
 
 void _paintPelican(Canvas canvas, RideLook look) {
@@ -436,10 +437,10 @@ void _paintBeak(
 }
 
 void _paintLegs(Canvas canvas, Offset hip, RideLook look) {
-  final angle = look.wheelAngle;
-  final crank = look.ducking ? const Offset(92, 104) : const Offset(84, 104);
-  final a = Offset(math.cos(angle), math.sin(angle)) * 13;
-  final pedals = [crank + a, crank - a];
+  final a =
+      Offset(math.cos(look.wheelAngle), math.sin(look.wheelAngle)) *
+      _crankRadius;
+  final pedalPositions = <Offset>[_crankCenter + a, _crankCenter - a];
 
   final farLeg = Paint()
     ..color = RideColors.leg.withValues(alpha: 0.65)
@@ -452,23 +453,58 @@ void _paintLegs(Canvas canvas, Offset hip, RideLook look) {
     ..strokeWidth = 4.4
     ..strokeCap = StrokeCap.round;
 
-  for (var i = 0; i < pedals.length; i++) {
-    final pedal = pedals[i];
+  for (var i = 0; i < pedalPositions.length; i++) {
+    // 蹼足落在踏板上方一点，踏板随后画在最上层，两者都能看清。
+    final foot = pedalPositions[i] + const Offset(0, -4);
     final knee = Offset(
-      (hip.dx + pedal.dx) / 2 + 5,
-      (hip.dy + pedal.dy) / 2 + 2,
+      (hip.dx + foot.dx) / 2 + 5,
+      (hip.dy + foot.dy) / 2 + 2,
     );
     final path = Path()
       ..moveTo(hip.dx, hip.dy)
-      ..quadraticBezierTo(knee.dx, knee.dy, pedal.dx, pedal.dy - 2);
+      ..quadraticBezierTo(knee.dx, knee.dy, foot.dx - 1, foot.dy);
     canvas.drawPath(path, i == 0 ? farLeg : nearLeg);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromCenter(center: pedal, width: 8, height: 3),
-        const Radius.circular(1.5),
+        Rect.fromCenter(center: foot, width: 9, height: 3.4),
+        const Radius.circular(1.6),
       ),
-      Paint()..color = RideColors.leg,
+      Paint()
+        ..color = i == 0
+            ? RideColors.leg.withValues(alpha: 0.75)
+            : RideColors.leg,
     );
+  }
+}
+
+/// 踏板单独画在腿之上，避免被蹼足盖住；深色踏板面加高光便于辨认。
+void _paintPedals(Canvas canvas, RideLook look) {
+  final a =
+      Offset(math.cos(look.wheelAngle), math.sin(look.wheelAngle)) *
+      _crankRadius;
+  final pedalPositions = <Offset>[_crankCenter + a, _crankCenter - a];
+
+  final body = Paint()..color = RideColors.frameDark;
+  final face = Paint()
+    ..color = RideColors.roadLine.withValues(alpha: 0.85)
+    ..strokeWidth = 1.3
+    ..strokeCap = StrokeCap.round;
+  final spindle = Paint()..color = RideColors.tyre;
+
+  for (final pedal in pedalPositions) {
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: pedal, width: 14, height: 4.8),
+        const Radius.circular(1.8),
+      ),
+      body,
+    );
+    canvas.drawLine(
+      pedal + const Offset(-5, -1.6),
+      pedal + const Offset(5, -1.6),
+      face,
+    );
+    canvas.drawCircle(pedal, 1.2, spindle);
   }
 }
 
