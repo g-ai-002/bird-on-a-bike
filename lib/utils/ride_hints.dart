@@ -11,17 +11,17 @@ class RideHints {
   /// 主界面底部的一句话提示。
   static String get home => isDesktopPlatform
       ? '空格 / ↑ 跳跃，空中再按一次二段跳；↓ / S 俯身穿过横幅'
-      : '点击或上滑跳跃，再点一次二段跳；下滑俯身穿过横幅';
+      : '点击或上滑跳跃，空中再来一次二段跳；下滑俯身穿过横幅';
 
   /// 游戏画面底部的开局提示，几秒后自动淡出。
   static String get inGame => isDesktopPlatform
       ? '空格 / ↑ 跳跃（可二段跳）· 长按跳更高 · ↓ 俯身 · P 暂停'
-      : '点击 / 上滑跳跃 · 下滑俯身 · 右上角暂停';
+      : '点击 / 上滑跳跃（可二段跳）· 下滑俯身 · 右上角暂停';
 
   /// 设置页：跳跃与二段跳。
   static String get jump => isDesktopPlatform
       ? '空格 / ↑ / W 起跳，空中再按一次可二段跳；松开按键跳得更矮'
-      : '点击或上滑起跳，空中再点/上滑一次可二段跳；长按跳得更高';
+      : '点击或上滑跳跃，空中再点/上滑一次可二段跳；长按跳得更高';
 
   /// 设置页：俯身。
   static String get duck => isDesktopPlatform
