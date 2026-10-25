@@ -13,6 +13,7 @@ import '../services/audio_service.dart';
 import '../utils/constants.dart';
 import 'bike_world.dart';
 import 'components/death_flash_component.dart';
+import 'components/letterbox_component.dart';
 import 'components/particle_burst_component.dart';
 import 'components/ride_entities_component.dart';
 import 'components/road_component.dart';
@@ -61,7 +62,7 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
     AppConstants.worldHeight / 2,
   );
 
-  /// 把 800×450 的世界铺满画布所需的缩放（cover）。
+  /// 把 800×450 的世界按宽度铺满画布所需的缩放；高度不足处交给留白层。
   double _baseZoom = 1;
 
   /// 物理像素与逻辑像素之比：静态图层按 [rasterScale] 烘焙，保证放大后仍清晰。
@@ -107,6 +108,7 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
     _spray = WheelSprayComponent(provider: provider, priority: 9);
 
     final scene = <Component>[
+      LetterboxComponent(provider: provider, priority: -100),
       SkyBackdropComponent(
         provider: provider,
         rasterScale: () => rasterScale,
@@ -185,7 +187,8 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
   }
 
   void _updateBaseZoom(Vector2 canvasSize) {
-    _baseZoom = coverZoom(
+    // 水平方向始终铺满：折叠屏展开等近方形画布只上下留白，不裁短左右。
+    _baseZoom = gameZoom(
       Size(canvasSize.x, canvasSize.y),
       const Size(AppConstants.worldWidth, AppConstants.worldHeight),
     );

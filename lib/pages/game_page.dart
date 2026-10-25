@@ -132,7 +132,7 @@ class _GamePageState extends State<GamePage> {
       backgroundColor: RideColors.skyTop,
       body: Stack(
         children: [
-          // 画布铺满整页；相机按 cover 缩放，四周只会裁切、不会留黑边。
+          // 画布铺满整页；相机按宽度铺满世界，更高的窗口由留白层补齐上下。
           Positioned.fill(
             child: Listener(
               behavior: HitTestBehavior.opaque,
