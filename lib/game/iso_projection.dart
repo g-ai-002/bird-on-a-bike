@@ -30,6 +30,12 @@ class IsoProjection {
   static const double roadFarZ = 7.5;
   static const double roadNearZ = -7.5;
 
+  /// 单向单车道的沥青带半宽；沥青外到路面边界留作沙石路肩。
+  static const double laneHalfZ = 4.6;
+
+  /// 车道边线所在的深度。
+  static const double laneEdgeZ = 4.0;
+
   /// 路面之外的海岸沙带宽度与海水的近端深度。
   static const double shoreWidth = 1.5;
   static const double seaEdgeZ = roadFarZ + shoreWidth;
@@ -55,6 +61,18 @@ class IsoProjection {
   /// 已骑行米数换算成屏幕滚动像素。
   static double travelPixels(double meters) =>
       meters * worldUnitsPerMeter * pxPerUnit;
+
+  /// 画布横坐标反算回某个深度上的世界 x。
+  static double worldXAtScreenX(double screenX, double z) =>
+      (screenX - AppConstants.worldWidth / 2 - z * depthSlantX) / pxPerUnit;
+
+  /// 地面精灵（以底边中点为锚点）是否还有一部分落在画布内。
+  ///
+  /// 沿路植被与碎石用它替代手写的 `worldX` 阈值：只有整个包围盒都移出
+  /// 画面才停止绘制，与障碍物的回收规则保持一致。
+  static bool isGroundSpriteVisible(Offset ground, double halfWidthPx) =>
+      ground.dx + halfWidthPx > 0 &&
+      ground.dx - halfWidthPx < AppConstants.worldWidth;
 
   /// 绘制顺序：远的先画，近的后画。
   static double depthOrder(double z) => -z;

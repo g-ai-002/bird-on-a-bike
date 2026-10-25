@@ -1,5 +1,6 @@
 import 'package:bird_on_a_bike/game/iso_projection.dart';
 import 'package:bird_on_a_bike/game/world_layout.dart';
+import 'package:bird_on_a_bike/models/obstacle.dart';
 import 'package:bird_on_a_bike/utils/constants.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -50,6 +51,36 @@ void main() {
       expect(IsoProjection.seaEdgeY, greaterThan(IsoProjection.horizonY));
       expect(IsoProjection.seaEdgeY, lessThan(IsoProjection.roadFarY));
       expect(IsoProjection.roadNearY, greaterThan(AppConstants.groundY));
+    });
+
+    test('单向单车道窄于路面，仍能容纳障碍的深度摆位', () {
+      final maxHalfDepth = ObstacleKind.values
+              .map((kind) => kind.depth)
+              .reduce((a, b) => a > b ? a : b) /
+          2;
+      expect(IsoProjection.laneHalfZ, lessThan(IsoProjection.roadFarZ));
+      expect(IsoProjection.laneEdgeZ, lessThan(IsoProjection.laneHalfZ));
+      expect(
+        AppConstants.depthSpread + maxHalfDepth,
+        lessThan(IsoProjection.laneEdgeZ),
+      );
+    });
+
+    test('沿路精灵只有整块移出画布才不可见', () {
+      // 半个草丛还压在左边框上，仍需绘制到完全离开为止。
+      final leftEdge = IsoProjection.project(-57, 0, 8.6);
+      expect(IsoProjection.isGroundSpriteVisible(leftEdge, 10), isTrue);
+
+      final offLeft = IsoProjection.project(-63, 0, 8.6);
+      expect(offLeft.dx + 10, lessThan(0));
+      expect(IsoProjection.isGroundSpriteVisible(offLeft, 10), isFalse);
+
+      final offRight = IsoProjection.project(31, 0, 8.6);
+      expect(
+        offRight.dx - 10,
+        greaterThan(AppConstants.worldWidth),
+      );
+      expect(IsoProjection.isGroundSpriteVisible(offRight, 10), isFalse);
     });
   });
 

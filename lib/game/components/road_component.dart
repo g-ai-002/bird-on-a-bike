@@ -6,30 +6,27 @@ import '../rendering/scenery_sprites.dart';
 import '../ride_style.dart';
 import 'scene_layer_component.dart';
 
-/// 等距路面：沥青带、海岸沙带、车道线与沿路植被。
+/// 等距路面：单向单车道沥青带、沙石路肩、海岸沙带与沿路植被。
 ///
-/// 静态路面（沥青、沙带、边线）首次渲染时烘焙成一张 [Picture]；
-/// 虚线单独烘焙并按骑行距离平移；草丛、碎石与椰树来自 [ScenerySprites]
-/// 的缓存精灵，滚动时不再重复构建 Path。
+/// 静态路面（路肩、沥青、沙带、边线）首次渲染时烘焙成一张 [Picture]；
+/// 行车箭头单独烘焙并按骑行距离平移；草丛、碎石与椰树来自
+/// [ScenerySprites] 的缓存精灵，只有整块移出画布才停止绘制。
 class RoadComponent extends SceneLayerComponent {
   RoadComponent({required super.provider, super.priority});
 
   static const double _xNear = -70;
   static const double _xFar = 70;
-  static const double _edgeLineZ = 6.2;
-  static const double _laneZ = 2.6;
-  static const double _dashLength = 3.4;
-  static const double _dashPeriod = _dashLength * 2;
+  static const double _arrowPeriod = 15;
 
   final Paint _foamPaint = Paint()
     ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.4);
   final Paint _seamPaint = Paint()
     ..color = const Color(0xFF000000).withValues(alpha: 0.14);
-  final Paint _dashPaint = Paint()
-    ..color = RideColors.roadLine.withValues(alpha: 0.8);
+  final Paint _arrowPaint = Paint()
+    ..color = RideColors.roadLine.withValues(alpha: 0.38);
 
   Picture? _staticPicture;
-  Picture? _dashPicture;
+  Picture? _arrowPicture;
 
   @override
   void render(Canvas canvas) {
@@ -41,10 +38,10 @@ class RoadComponent extends SceneLayerComponent {
     canvas.drawPicture(_staticPicture!);
     _paintFoam(canvas, unitScroll);
 
-    final dashShift = (unitScroll % _dashPeriod) * IsoProjection.pxPerUnit;
+    final arrowShift = (unitScroll % _arrowPeriod) * IsoProjection.pxPerUnit;
     canvas.save();
-    canvas.translate(-dashShift, 0);
-    canvas.drawPicture(_dashPicture!);
+    canvas.translate(-arrowShift, 0);
+    canvas.drawPicture(_arrowPicture!);
     canvas.restore();
 
     _paintCrossSeams(canvas, unitScroll);
@@ -54,12 +51,13 @@ class RoadComponent extends SceneLayerComponent {
   void _ensureStatic() {
     if (_staticPicture != null) return;
     _staticPicture = _record((canvas) {
+      _paintShoulders(canvas);
       _paintSurf(canvas);
       _paintFarShore(canvas);
       _paintNearShore(canvas);
       _paintEdgeLines(canvas);
     });
-    _dashPicture = _record(_paintLaneDashes);
+    _arrowPicture = _record(_paintLaneArrows);
   }
 
   Picture _record(void Function(Canvas canvas) painter) {
@@ -82,26 +80,63 @@ class RoadComponent extends SceneLayerComponent {
       ..close();
   }
 
+  void _paintShoulders(Canvas canvas) {
+    final paint = Paint()
+      ..shader = Gradient.linear(
+        Offset(0, IsoProjection.roadFarY),
+        Offset(0, IsoProjection.roadNearY),
+        <Color>[
+          const Color(0xFF7C6748),
+          const Color(0xFF6A5439),
+          const Color(0xFF57432C),
+        ],
+        <double>[0, 0.55, 1],
+      );
+    canvas.drawPath(
+      _quad(
+        _xNear,
+        _xFar,
+        IsoProjection.laneHalfZ,
+        IsoProjection.roadFarZ,
+      ),
+      paint,
+    );
+    canvas.drawPath(
+      _quad(
+        _xNear,
+        _xFar,
+        IsoProjection.roadNearZ,
+        -IsoProjection.laneHalfZ,
+      ),
+      paint,
+    );
+  }
+
   void _paintSurf(Canvas canvas) {
     final far = IsoProjection.roadFarY;
     final near = IsoProjection.roadNearY;
     canvas.drawPath(
-      _quad(_xNear, _xFar, IsoProjection.roadNearZ, IsoProjection.roadFarZ),
+      _quad(
+        _xNear,
+        _xFar,
+        -IsoProjection.laneHalfZ,
+        IsoProjection.laneHalfZ,
+      ),
       Paint()
         ..shader = Gradient.linear(
           Offset(0, far),
           Offset(0, near),
           <Color>[
-            const Color(0xFF333333),
-            const Color(0xFF414141),
+            const Color(0xFF3A3A38),
             const Color(0xFF4A4A46),
+            const Color(0xFF55554F),
           ],
           <double>[0, 0.55, 1],
         ),
     );
     canvas.drawPath(
       _quad(_xNear, _xFar, -0.9, 0.9),
-      Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.022),
+      Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.03),
     );
   }
 
@@ -157,21 +192,35 @@ class RoadComponent extends SceneLayerComponent {
 
   void _paintEdgeLines(Canvas canvas) {
     final paint = Paint()..color = RideColors.roadLine.withValues(alpha: 0.55);
-    for (final z in <double>[-_edgeLineZ, _edgeLineZ]) {
+    for (final z in <double>[
+      -IsoProjection.laneEdgeZ,
+      IsoProjection.laneEdgeZ,
+    ]) {
       canvas.drawPath(_quad(_xNear, _xFar, z - 0.11, z + 0.11), paint);
     }
   }
 
-  void _paintLaneDashes(Canvas canvas) {
-    for (final z in <double>[-_laneZ, _laneZ]) {
-      for (var i = -12; i <= 12; i++) {
-        final x = i * _dashPeriod;
-        canvas.drawPath(
-          _quad(x, x + _dashLength, z - 0.14, z + 0.14),
-          _dashPaint,
-        );
-      }
+  /// 单行道的地面箭头，指向骑行前进方向（画面右侧）。
+  void _paintLaneArrows(Canvas canvas) {
+    for (var i = -14; i <= 14; i++) {
+      canvas.drawPath(_arrowPath(i * _arrowPeriod), _arrowPaint);
     }
+  }
+
+  Path _arrowPath(double x) {
+    final tail = x;
+    final neck = x + 2.0;
+    final tip = x + 3.8;
+    return Path()
+      ..addPolygon(<Offset>[
+        IsoProjection.project(tail, 0, -0.34),
+        IsoProjection.project(neck, 0, -0.34),
+        IsoProjection.project(neck, 0, -1.15),
+        IsoProjection.project(tip, 0, 0),
+        IsoProjection.project(neck, 0, 1.15),
+        IsoProjection.project(neck, 0, 0.34),
+        IsoProjection.project(tail, 0, 0.34),
+      ], true);
   }
 
   void _paintCrossSeams(Canvas canvas, double unitScroll) {
@@ -180,23 +229,56 @@ class RoadComponent extends SceneLayerComponent {
     for (var i = -3; i <= 4; i++) {
       final x = i * period - offset;
       canvas.drawPath(
-        _quad(x, x + 0.16, IsoProjection.roadNearZ, IsoProjection.roadFarZ),
+        _quad(
+          x,
+          x + 0.16,
+          -IsoProjection.laneHalfZ,
+          IsoProjection.laneHalfZ,
+        ),
         _seamPaint,
       );
     }
   }
 
+  /// 沿路装饰需要遍历的 index 区间。
+  ///
+  /// 世界 x = index * gap - unitScroll + offset；区间由画布左右边界反算，
+  /// 前后各多留一格，保证精灵在完全进入画面前就已准备好，
+  /// 而是否真正绘制仍由 [IsoProjection.isGroundSpriteVisible] 决定。
+  (int, int) _tileRange({
+    required double gap,
+    required double unitScroll,
+    required double z,
+    required double halfWidthPx,
+    double offset = 0,
+  }) {
+    final left = IsoProjection.worldXAtScreenX(-halfWidthPx, z);
+    final right = IsoProjection.worldXAtScreenX(
+      AppConstants.worldWidth + halfWidthPx,
+      z,
+    );
+    return (
+      ((left + unitScroll - offset) / gap).floor() - 1,
+      ((right + unitScroll - offset) / gap).ceil() + 1,
+    );
+  }
+
   void _paintShoreProps(Canvas canvas, double unitScroll) {
     const grassGap = 3.1;
-    final grassTile = (unitScroll / grassGap).floor();
-    const grassCount = AppConstants.worldWidth / (grassGap * 10) + 3;
-    for (var i = -2; i <= grassCount; i++) {
-      final index = grassTile + i;
+    final (grassFirst, grassLast) = _tileRange(
+      gap: grassGap,
+      unitScroll: unitScroll,
+      z: 8.6,
+      halfWidthPx: 12,
+    );
+    for (var index = grassFirst; index <= grassLast; index++) {
       final worldX = index * grassGap - unitScroll;
-      if (worldX < -44 || worldX > 44) continue;
       final z = 7.9 + (index % 3) * 0.35;
-      final base = IsoProjection.project(worldX, 0, z);
       final height = 12.0 + (index % 4) * 3.5;
+      final base = IsoProjection.project(worldX, 0, z);
+      if (!IsoProjection.isGroundSpriteVisible(base, height * 0.31 + 2)) {
+        continue;
+      }
       ScenerySprites.drawGrass(
         canvas,
         base,
@@ -206,13 +288,17 @@ class RoadComponent extends SceneLayerComponent {
     }
 
     const stoneGap = 9.7;
-    final stoneTile = (unitScroll / stoneGap).floor();
-    for (var i = -1; i <= 10; i++) {
-      final index = stoneTile + i;
+    final (stoneFirst, stoneLast) = _tileRange(
+      gap: stoneGap,
+      unitScroll: unitScroll,
+      z: 8.55,
+      halfWidthPx: 11,
+    );
+    for (var index = stoneFirst; index <= stoneLast; index++) {
       final worldX = index * stoneGap - unitScroll;
-      if (worldX < -44 || worldX > 44) continue;
       final base = IsoProjection.project(worldX, 0, 8.15 + (index % 2) * 0.4);
       final size = 9.0 + (index % 3) * 3.5;
+      if (!IsoProjection.isGroundSpriteVisible(base, size / 2 + 2)) continue;
       ScenerySprites.drawStone(
         canvas,
         base,
@@ -222,15 +308,25 @@ class RoadComponent extends SceneLayerComponent {
     }
 
     const palmGap = 37.0;
-    final palmTile = (unitScroll / palmGap).floor();
-    for (var i = -1; i <= 3; i++) {
-      final index = palmTile + i;
-      final worldX = index * palmGap - unitScroll + 6;
-      if (worldX < -46 || worldX > 48) continue;
+    const palmOffset = 6.0;
+    final (palmFirst, palmLast) = _tileRange(
+      gap: palmGap,
+      unitScroll: unitScroll,
+      z: 8.6,
+      halfWidthPx: ScenerySprites.palmSize.width / 2 + 6,
+      offset: palmOffset,
+    );
+    for (var index = palmFirst; index <= palmLast; index++) {
+      final worldX = index * palmGap - unitScroll + palmOffset;
+      final scale = index.isEven ? 1.0 : 0.82;
       final base = IsoProjection.project(worldX, 0, 8.6);
-      ScenerySprites.palm(
-        index,
-      ).render(canvas, base, scale: index.isEven ? 1.0 : 0.82);
+      if (!IsoProjection.isGroundSpriteVisible(
+        base,
+        ScenerySprites.palmSize.width * scale / 2 + 4,
+      )) {
+        continue;
+      }
+      ScenerySprites.palm(index).render(canvas, base, scale: scale);
     }
   }
 }

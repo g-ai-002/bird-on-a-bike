@@ -30,37 +30,72 @@ class ShoreForegroundComponent extends SceneLayerComponent {
     );
 
     const gap = 2.4;
-    final tile = (unitScroll / gap).floor();
-    for (var i = -2; i <= AppConstants.worldWidth / (gap * 10) + 3; i++) {
-      final index = tile + i;
+    final (grassFirst, grassLast) = _tileRange(
+      gap: gap,
+      unitScroll: unitScroll,
+      halfWidthPx: 13,
+    );
+    for (var index = grassFirst; index <= grassLast; index++) {
       final worldX = index * gap - unitScroll;
-      if (worldX < -46 || worldX > 46) continue;
       final screenX =
           IsoProjection.project(worldX, 0, IsoProjection.roadNearZ).dx;
       final tuftHeight = 16.0 + (index % 4) * 6.5;
+      final tuftWidth = tuftHeight * 0.7;
+      if (!IsoProjection.isGroundSpriteVisible(
+        Offset(screenX, 0),
+        tuftWidth / 2 + 2,
+      )) {
+        continue;
+      }
       ScenerySprites.drawGrass(
         canvas,
         Offset(screenX, height + 4),
-        Size(tuftHeight * 0.7, tuftHeight),
+        Size(tuftWidth, tuftHeight),
         index.isEven ? _ink : _inkSoft,
       );
     }
 
     const stoneGap = 8.3;
-    final stoneTile = (unitScroll / stoneGap).floor();
-    for (var i = -1; i <= 12; i++) {
-      final index = stoneTile + i;
-      final worldX = index * stoneGap - unitScroll;
-      if (worldX < -44 || worldX > 44) continue;
+    final (stoneFirst, stoneLast) = _tileRange(
+      gap: stoneGap,
+      unitScroll: unitScroll,
+      halfWidthPx: 15,
+    );
+    for (var index = stoneFirst; index <= stoneLast; index++) {
       if (index % 3 != 0) continue;
+      final worldX = index * stoneGap - unitScroll;
       final screenX =
           IsoProjection.project(worldX, 0, IsoProjection.roadNearZ).dx;
       final size = 14.0 + (index % 3) * 6;
+      if (!IsoProjection.isGroundSpriteVisible(Offset(screenX, 0), size / 2)) {
+        continue;
+      }
       ScenerySprites.drawStone(
         canvas,
         Offset(screenX, height + 6),
         Size(size, size * 0.6),
       );
     }
+  }
+
+  /// 该深度上需要遍历的 index 区间：按画布左右边界反算并前后多留一格，
+  /// 使剪影在完全进入画面之前就已准备好，只有整块移出画面才停止绘制。
+  (int, int) _tileRange({
+    required double gap,
+    required double unitScroll,
+    required double halfWidthPx,
+  }) {
+    final left = IsoProjection.worldXAtScreenX(
+      -halfWidthPx,
+      IsoProjection.roadNearZ,
+    );
+    final right = IsoProjection.worldXAtScreenX(
+      AppConstants.worldWidth + halfWidthPx,
+      IsoProjection.roadNearZ,
+    );
+    return (
+      ((left + unitScroll) / gap).floor() - 1,
+      ((right + unitScroll) / gap).ceil() + 1,
+    );
   }
 }
