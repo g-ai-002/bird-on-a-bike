@@ -1,5 +1,5 @@
 import 'dart:math' as math;
-import 'dart:ui' show Canvas, Color, Rect;
+import 'dart:ui' show Canvas, Color, PlatformDispatcher, Rect;
 
 import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;
@@ -115,6 +115,12 @@ class RideScene {
 
   final Map<int, Node> _obstacleNodes = {};
   final Map<int, Node> _pickupNodes = {};
+  final Map<int, ObstacleKind> _obstacleKinds = {};
+  final Map<int, PickupKind> _pickupKinds = {};
+  final Map<ObstacleKind, List<Node>> _obstaclePool = {};
+  final Map<PickupKind, List<Node>> _pickupPool = {};
+  final Map<ObstacleKind, List<Mesh>> _obstacleMeshes = {};
+  final Map<PickupKind, List<Mesh>> _pickupMeshes = {};
 
   double _elapsed = 0;
   double _wheelAngle = 0;
@@ -130,6 +136,12 @@ class RideScene {
     );
 
     _createAssets();
+
+    final dpr =
+        PlatformDispatcher.instance.implicitView?.devicePixelRatio ?? 1.0;
+    scene
+      ..antiAliasingMode = AntiAliasingMode.fxaa
+      ..renderScale = dpr >= 2.0 ? 0.85 : 1.0;
 
     final sky = GradientSkySource(
       zenithColor: _linear3(RideColors.skyTop),
@@ -151,6 +163,14 @@ class RideScene {
     _buildBackdrop();
     _buildStage();
     _buildRider();
+
+    // 预热合并后的障碍/拾取物网格，避免首次生成时卡顿
+    for (final kind in ObstacleKind.values) {
+      _obstacleMeshes[kind] = _mergeNodeMeshes(_buildObstacle(kind));
+    }
+    for (final kind in PickupKind.values) {
+      _pickupMeshes[kind] = _mergeNodeMeshes(_buildPickup(kind));
+    }
 
     _syncRider();
     _syncObstacles();
@@ -174,7 +194,14 @@ class RideScene {
   }
 
   void render(Canvas canvas, Rect viewport) {
-    scene.render(camera, canvas, viewport: viewport);
+    final dpr =
+        PlatformDispatcher.instance.implicitView?.devicePixelRatio ?? 1.0;
+    scene.render(
+      camera,
+      canvas,
+      viewport: viewport,
+      pixelRatio: math.min(dpr, 1.5),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -183,15 +210,30 @@ class RideScene {
 
   void _createAssets() {
     _cube = CuboidGeometry(vm.Vector3(1, 1, 1));
-    _cylinder = CylinderGeometry(radialSegments: 24);
-    _cone = CylinderGeometry(topRadius: 0, radialSegments: 20);
-    _sphere = SphereGeometry(radius: 1, segments: 28, rings: 18);
-    _ring = TorusGeometry(radius: 1, tubeRadius: 0.12, tubularSegments: 10);
-    _rimRing = TorusGeometry(radius: 1, tubeRadius: 0.04, tubularSegments: 8);
-    _thinRing = TorusGeometry(radius: 1, tubeRadius: 0.02, tubularSegments: 6);
-    _disc = DiscGeometry(radius: 1);
-    _rock = IcosphereGeometry(radius: 1);
-    _bill = CylinderGeometry(topRadius: 0.12, radialSegments: 20);
+    _cylinder = CylinderGeometry(radialSegments: 20);
+    _cone = CylinderGeometry(topRadius: 0, radialSegments: 16);
+    _sphere = SphereGeometry(radius: 1, segments: 20, rings: 14);
+    _ring = TorusGeometry(
+      radius: 1,
+      tubeRadius: 0.12,
+      radialSegments: 24,
+      tubularSegments: 8,
+    );
+    _rimRing = TorusGeometry(
+      radius: 1,
+      tubeRadius: 0.04,
+      radialSegments: 24,
+      tubularSegments: 6,
+    );
+    _thinRing = TorusGeometry(
+      radius: 1,
+      tubeRadius: 0.02,
+      radialSegments: 24,
+      tubularSegments: 6,
+    );
+    _disc = DiscGeometry(radius: 1, segments: 28);
+    _rock = IcosphereGeometry(radius: 1, subdivisions: 1);
+    _bill = CylinderGeometry(topRadius: 0.12, radialSegments: 16);
 
     _roadMat = _pbr(RideColors.road, roughness: 0.95);
     _sandMat = _pbr(const Color(0xFFB98A5A), roughness: 0.95);
@@ -621,31 +663,43 @@ class RideScene {
       _node(
         _sphere,
         _pouchMat,
-        position: vm.Vector3(2.95, 3.5, 0.75),
-        scale: vm.Vector3(0.55, 0.45, 0.15),
+        position: vm.Vector3(2.95, 3.48, -0.78),
+        scale: vm.Vector3(0.58, 0.46, 0.14),
+      ),
+    );
+
+    // 卡通大眼：眼白、深色瞳孔和高光都朝相机一侧（-Z）
+    final eyeCenter = vm.Vector3(2.98, 3.72, -0.98);
+    _torso.add(
+      _node(
+        _sphere,
+        _eyeGlintMat,
+        position: eyeCenter,
+        scale: vm.Vector3(0.4, 0.46, 0.22),
       ),
     );
     _torso.add(
       _node(
         _sphere,
         _eyeMat,
-        position: vm.Vector3(3.18, 3.55, 0.95),
-        scale: vm.Vector3.all(0.2),
+        position: eyeCenter + vm.Vector3(0.05, -0.01, -0.18),
+        scale: vm.Vector3(0.25, 0.3, 0.16),
       ),
     );
     _torso.add(
       _node(
         _sphere,
         _eyeGlintMat,
-        position: vm.Vector3(3.24, 3.62, 1.08),
-        scale: vm.Vector3.all(0.07),
+        position: eyeCenter + vm.Vector3(0.13, 0.13, -0.32),
+        scale: vm.Vector3(0.09, 0.09, 0.06),
       ),
     );
     _torso.add(
-      _box(
-        vm.Vector3(0.4, 0.12, 0.15),
+      _node(
+        _sphere,
         _featherShadeMat,
-        vm.Vector3(3.12, 3.82, 0.82),
+        position: vm.Vector3(2.98, 4.02, -0.76),
+        scale: vm.Vector3(0.4, 0.1, 0.16),
       ),
     );
 
@@ -894,9 +948,9 @@ class RideScene {
       alive.add(obstacle.id);
       var node = _obstacleNodes[obstacle.id];
       if (node == null) {
-        node = _buildObstacle(obstacle.kind);
+        node = _takeObstacleNode(obstacle.kind);
         _obstacleNodes[obstacle.id] = node;
-        scene.add(node);
+        _obstacleKinds[obstacle.id] = obstacle.kind;
       }
       node.position = vm.Vector3(SceneUnits.obstacleCenterX(obstacle), 0, 0);
     }
@@ -904,8 +958,28 @@ class RideScene {
     for (final id in _obstacleNodes.keys.toList()) {
       if (alive.contains(id)) continue;
       final node = _obstacleNodes.remove(id);
-      if (node != null) scene.remove(node);
+      final kind = _obstacleKinds.remove(id);
+      if (node == null) continue;
+      node.visible = false;
+      if (kind != null) {
+        _obstaclePool.putIfAbsent(kind, () => []).add(node);
+      }
     }
+  }
+
+  Node _takeObstacleNode(ObstacleKind kind) {
+    final pooled = _obstaclePool[kind];
+    if (pooled != null && pooled.isNotEmpty) {
+      final node = pooled.removeLast();
+      node.visible = true;
+      return node;
+    }
+    final meshes = _obstacleMeshes[kind] ??= _mergeNodeMeshes(
+      _buildObstacle(kind),
+    );
+    final node = _nodeFromMeshes(meshes);
+    scene.add(node);
+    return node;
   }
 
   Node _buildObstacle(ObstacleKind kind) {
@@ -1301,9 +1375,9 @@ class RideScene {
       alive.add(pickup.id);
       var node = _pickupNodes[pickup.id];
       if (node == null) {
-        node = _buildPickup(pickup.kind);
+        node = _takePickupNode(pickup.kind);
         _pickupNodes[pickup.id] = node;
-        scene.add(node);
+        _pickupKinds[pickup.id] = pickup.kind;
       }
       final bob = math.sin(_elapsed * 3 + pickup.phase) * 0.5;
       node.position = vm.Vector3(
@@ -1322,8 +1396,69 @@ class RideScene {
     for (final id in _pickupNodes.keys.toList()) {
       if (alive.contains(id)) continue;
       final node = _pickupNodes.remove(id);
-      if (node != null) scene.remove(node);
+      final kind = _pickupKinds.remove(id);
+      if (node == null) continue;
+      node.visible = false;
+      if (kind != null) {
+        _pickupPool.putIfAbsent(kind, () => []).add(node);
+      }
     }
+  }
+
+  Node _takePickupNode(PickupKind kind) {
+    final pooled = _pickupPool[kind];
+    if (pooled != null && pooled.isNotEmpty) {
+      final node = pooled.removeLast();
+      node.visible = true;
+      return node;
+    }
+    final meshes = _pickupMeshes[kind] ??= _mergeNodeMeshes(_buildPickup(kind));
+    final node = _nodeFromMeshes(meshes);
+    scene.add(node);
+    return node;
+  }
+
+  Node _nodeFromMeshes(List<Mesh> meshes) {
+    final node = Node();
+    for (final mesh in meshes) {
+      node.add(Node(mesh: mesh));
+    }
+    return node;
+  }
+
+  List<Mesh> _mergeNodeMeshes(Node root) {
+    final groups = <Material, List<MeshData>>{};
+    final dataCache = <Geometry, MeshData>{};
+    void visit(Node node) {
+      final mesh = node.mesh;
+      if (mesh != null) {
+        final transform = node.globalTransform;
+        for (final primitive in mesh.primitives) {
+          final source = dataCache.putIfAbsent(
+            primitive.geometry,
+            primitive.geometry.extractMeshData,
+          );
+          groups
+              .putIfAbsent(primitive.material, () => [])
+              .add(source.transformed(transform));
+        }
+      }
+      for (final child in node.children) {
+        visit(child);
+      }
+    }
+
+    visit(root);
+    return [
+      for (final entry in groups.entries)
+        Mesh(
+          MeshGeometry.fromMeshData(
+            MeshData.merge(entry.value),
+            retainCpuData: false,
+          ),
+          entry.key,
+        ),
+    ];
   }
 
   Node _buildPickup(PickupKind kind) {
