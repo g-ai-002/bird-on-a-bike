@@ -263,9 +263,10 @@ void _paintPelican(Canvas canvas, RideLook look) {
 
   final eye = Paint()..color = RideColors.eye;
   final glint = Paint()..color = Colors.white;
-  final eyeCenter = headCenter + (ducking ? const Offset(2, -3) : const Offset(2, -3));
-  canvas.drawCircle(eyeCenter, 2.4, eye);
-  canvas.drawCircle(eyeCenter + const Offset(0.8, -0.8), 0.9, glint);
+  // 眼睛贴近喙一侧，让视线朝向前进方向。
+  final eyeCenter = headCenter + const Offset(4.5, -3.2);
+  canvas.drawCircle(eyeCenter, 2.6, eye);
+  canvas.drawCircle(eyeCenter + const Offset(1.0, -1.0), 0.9, glint);
 
   final crest = Paint()
     ..color = RideColors.pelican
@@ -494,17 +495,17 @@ void _paintPedals(Canvas canvas, RideLook look) {
   for (final pedal in pedalPositions) {
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromCenter(center: pedal, width: 14, height: 4.8),
-        const Radius.circular(1.8),
+        Rect.fromCenter(center: pedal, width: 18, height: 6.2),
+        const Radius.circular(2.4),
       ),
       body,
     );
     canvas.drawLine(
-      pedal + const Offset(-5, -1.6),
-      pedal + const Offset(5, -1.6),
+      pedal + const Offset(-6.5, -2.1),
+      pedal + const Offset(6.5, -2.1),
       face,
     );
-    canvas.drawCircle(pedal, 1.2, spindle);
+    canvas.drawCircle(pedal, 1.4, spindle);
   }
 }
 
