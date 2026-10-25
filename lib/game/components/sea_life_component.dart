@@ -19,14 +19,6 @@ class SeaLifeComponent extends SceneLayerComponent {
     _FishJumpSeed(period: 11.3, phase: 0.76, x: 612, size: 9),
   ];
 
-  /// 跃出水面占一个周期的比例，其余时间潜在水下。
-  static const double _jumpPortion = 0.22;
-
-  /// 入水波纹：水花溅开后，两圈波纹错开扩散并淡出（秒）。
-  static const double _rippleSeconds = 0.85;
-  static const double _rippleDelay = 0.12;
-  static const double _rippleStagger = 0.22;
-
   /// 跃鱼所在的水面：靠近海天交界，明显远离近岸沙滩。
   static double get _waterlineY => IsoProjection.seaEdgeY - 66;
 
@@ -67,17 +59,18 @@ class SeaLifeComponent extends SceneLayerComponent {
     final takeOff = Offset(water.dx - span / 2, water.dy);
     final landing = Offset(water.dx + span / 2, water.dy);
 
-    if (cycle >= _jumpPortion) {
-      final sinceLanding = (cycle - _jumpPortion) * seed.period;
-      final after = (cycle - _jumpPortion) / 0.09;
-      if (after < 1) {
-        _paintSplash(canvas, landing, 1 - after);
+    final splash = SeaJumpSplash.at(cycle: cycle, period: seed.period);
+
+    if (cycle >= SeaJumpSplash.jumpPortion) {
+      // 鱼已经入水，画面只剩落水浪花与向外扩散的波纹。
+      if (splash.landingStrength > 0) {
+        _paintSplash(canvas, landing, splash.landingStrength);
       }
-      _paintRipples(canvas, landing, sinceLanding);
+      _paintRipples(canvas, landing, splash.rippleProgress);
       return;
     }
 
-    final t = cycle / _jumpPortion;
+    final t = cycle / SeaJumpSplash.jumpPortion;
     final height = 18.0 + seed.size * 0.9;
     final center = Offset(
       water.dx + (t - 0.5) * span,
@@ -106,12 +99,9 @@ class SeaLifeComponent extends SceneLayerComponent {
     canvas.drawCircle(const Offset(4.8, -1), 0.9, _fishShadePaint);
     canvas.restore();
 
-    // 浪花只出现在跃出与入水的瞬间，位置分别对齐起跳点与入水点。
-    const splashPortion = 0.3;
-    if (t < splashPortion) {
-      _paintSplash(canvas, takeOff, 1 - t / splashPortion);
-    } else if (1 - t < splashPortion) {
-      _paintSplash(canvas, landing, 1 - (1 - t) / splashPortion);
+    // 跃出瞬间在起跳点溅一次水花；落水浪花必须等鱼真正入水后才出现。
+    if (splash.takeOffStrength > 0) {
+      _paintSplash(canvas, takeOff, splash.takeOffStrength);
     }
   }
 
@@ -140,11 +130,9 @@ class SeaLifeComponent extends SceneLayerComponent {
     );
   }
 
-  /// 入水后从落点向外扩散的波纹：两圈错开出现，边扩散边淡出。
-  void _paintRipples(Canvas canvas, Offset landing, double sinceLanding) {
-    for (var i = 0; i < 2; i++) {
-      final progress =
-          (sinceLanding - _rippleDelay - _rippleStagger * i) / _rippleSeconds;
+  /// 入水瞬间从落点向外扩散的波纹：两圈错开出现，边扩散边淡出。
+  void _paintRipples(Canvas canvas, Offset landing, List<double> progresses) {
+    for (final progress in progresses) {
       if (progress <= 0 || progress >= 1) continue;
       final fade = 1 - progress;
       _ripplePaint
@@ -174,4 +162,63 @@ class _FishJumpSeed {
   final double phase;
   final double x;
   final double size;
+}
+
+/// 跃鱼溅水的时序：跃出瞬间只出水花，落水浪花与波纹都在鱼真正入水后开始。
+///
+/// 纯逻辑、便于单测：输入周期内的位置 [cycle] 与周期长度 [period]，
+/// 输出各处水花强度与波纹进度（未裁剪，绘制时只取 0 < p < 1）。
+class SeaJumpSplash {
+  const SeaJumpSplash._({
+    required this.takeOffStrength,
+    required this.landingStrength,
+    required this.rippleProgress,
+  });
+
+  /// 跃出水面占一个周期的比例，其余时间潜在水下。
+  static const double jumpPortion = 0.22;
+
+  /// 跃出水花持续多久，按跃出阶段的比例计。
+  static const double takeOffSplashPortion = 0.3;
+
+  /// 落水浪花持续时长（秒），从入水那一刻开始计时。
+  static const double splashSeconds = 0.55;
+
+  /// 入水波纹的圈数、单圈时长与相邻两圈的间隔（秒）。
+  static const int rippleCount = 2;
+  static const double rippleSeconds = 0.85;
+  static const double rippleStagger = 0.22;
+
+  factory SeaJumpSplash.at({
+    required double cycle,
+    required double period,
+  }) {
+    final airborne = cycle < jumpPortion;
+    final t = airborne ? cycle / jumpPortion : 1.0;
+    final sinceLanding = airborne ? 0.0 : (cycle - jumpPortion) * period;
+    return SeaJumpSplash._(
+      takeOffStrength: airborne && t < takeOffSplashPortion
+          ? 1 - t / takeOffSplashPortion
+          : 0,
+      landingStrength: airborne
+          ? 0
+          : (sinceLanding < splashSeconds
+                ? 1 - sinceLanding / splashSeconds
+                : 0),
+      rippleProgress: <double>[
+        if (!airborne)
+          for (var i = 0; i < rippleCount; i++)
+            (sinceLanding - rippleStagger * i) / rippleSeconds,
+      ],
+    );
+  }
+
+  /// 跃出瞬间的水花强度；0 表示这一帧不画。
+  final double takeOffStrength;
+
+  /// 入水瞬间起的水花强度，鱼还在空中时恒为 0。
+  final double landingStrength;
+
+  /// 波纹扩散进度：0 表示刚入水，1 表示散尽。
+  final List<double> rippleProgress;
 }

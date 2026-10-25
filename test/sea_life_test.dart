@@ -25,4 +25,45 @@ void main() {
     image.dispose();
     picture.dispose();
   });
+
+  test('入水前不出现落水浪花与波纹', () {
+    const period = 6.4;
+    final splash = SeaJumpSplash.at(
+      cycle: SeaJumpSplash.jumpPortion * 0.95,
+      period: period,
+    );
+    expect(splash.landingStrength, 0);
+    expect(splash.rippleProgress, isEmpty);
+  });
+
+  test('跃出瞬间起水花，并在跃出阶段内淡出', () {
+    const period = 6.4;
+    final takeOff = SeaJumpSplash.at(cycle: 0, period: period);
+    expect(takeOff.takeOffStrength, 1);
+    expect(takeOff.landingStrength, 0);
+
+    final faded = SeaJumpSplash.at(
+      cycle: SeaJumpSplash.jumpPortion * 0.6,
+      period: period,
+    );
+    expect(faded.takeOffStrength, 0);
+  });
+
+  test('鱼入水那一刻才开始落水浪花与波纹', () {
+    const period = 6.4;
+    final landing = SeaJumpSplash.at(
+      cycle: SeaJumpSplash.jumpPortion,
+      period: period,
+    );
+    expect(landing.landingStrength, 1);
+    expect(landing.rippleProgress.first, 0);
+
+    final later = SeaJumpSplash.at(
+      cycle: SeaJumpSplash.jumpPortion + 0.2 / period,
+      period: period,
+    );
+    expect(later.landingStrength, greaterThan(0));
+    expect(later.landingStrength, lessThan(1));
+    expect(later.rippleProgress.first, greaterThan(0));
+  });
 }
