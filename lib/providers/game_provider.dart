@@ -55,6 +55,11 @@ class GameProvider extends ChangeNotifier {
   double _notifyAccumulator = 0;
   int _persistedHigh = 0;
   double _persistedBest = 0;
+  double _persistCooldown = 0;
+
+  /// 进度落盘的最小间隔（秒）。最高速时距离增长约 6 m/s，
+  /// 逐帧比较会让写盘退化成每秒一次；节流后只在暂停/结算时补写一次。
+  static const double _persistInterval = 15;
 
   GameState get state => _state;
   Difficulty get difficulty => _difficulty;
@@ -81,6 +86,7 @@ class GameProvider extends ChangeNotifier {
     _duckHeld = false;
     _duckTimer = 0;
     _notifyAccumulator = 0;
+    _persistCooldown = 0;
 
     _state = GameState(
       status: GameStatus.playing,
@@ -96,6 +102,8 @@ class GameProvider extends ChangeNotifier {
     if (!_state.isPlaying) return;
     LogService.info('骑行暂停');
     _state = _state.copyWith(status: GameStatus.paused);
+    // 暂停时立即落盘，避免退出后丢掉最多一个节流周期的进度。
+    _persistProgress(_state, force: true);
     notifyListeners();
   }
 
@@ -170,6 +178,8 @@ class GameProvider extends ChangeNotifier {
     // 窗口拖动或后台恢复可能产生超大帧间隔，限制步长避免瞬移穿模。
     if (dt > 0.05) dt = 0.05;
 
+    _persistCooldown = max(0.0, _persistCooldown - dt);
+
     final s = _state;
     final ducking = _duckHeld || _duckTimer > 0;
     _duckTimer = max(0.0, _duckTimer - dt);
@@ -180,12 +190,17 @@ class GameProvider extends ChangeNotifier {
     final moved = speed * dt;
     final distance = s.distance + moved / WorldLayout.unitsPerMeter;
 
-    var obstacles = <Obstacle>[
-      for (final obstacle in s.obstacles) obstacle.moveBy(-moved),
-    ]..removeWhere((obstacle) => obstacle.isOffscreen);
-    var pickups = <Pickup>[
-      for (final pickup in s.pickups) pickup.moveBy(-moved),
-    ]..removeWhere((pickup) => pickup.isOffscreen);
+    // 实体原地推进：每帧只分配两个列表，不再为每个实体复制对象。
+    final obstacles = <Obstacle>[];
+    for (final obstacle in s.obstacles) {
+      obstacle.moveBy(-moved);
+      if (!obstacle.isOffscreen) obstacles.add(obstacle);
+    }
+    final pickups = <Pickup>[];
+    for (final pickup in s.pickups) {
+      pickup.moveBy(-moved);
+      if (!pickup.isOffscreen) pickups.add(pickup);
+    }
 
     _nextObstacleIn -= dt;
     if (_nextObstacleIn <= 0 && obstacles.length < AppConstants.maxObstacles) {
@@ -236,9 +251,10 @@ class GameProvider extends ChangeNotifier {
 
     var magnetRemaining = max(0.0, s.magnetRemaining - dt);
     if (magnetRemaining > 0) {
-      pickups = [
-        for (final pickup in pickups) _attract(pickup, rider, dt),
-      ];
+      // 吸附直接改写拾取物坐标，避免每帧再复制一份列表。
+      for (final pickup in pickups) {
+        _attract(pickup, rider, dt);
+      }
     }
 
     var fish = s.fish;
@@ -253,12 +269,11 @@ class GameProvider extends ChangeNotifier {
     var caughtFish = 0;
     var pickedPowerUp = false;
 
-    final remainingPickups = <Pickup>[];
-    for (final pickup in pickups) {
-      if (!pickupReached(pickup, rider)) {
-        remainingPickups.add(pickup);
-        continue;
-      }
+    // 倒序删除已拾取的物件，省掉一份 remaining 列表。
+    for (var i = pickups.length - 1; i >= 0; i--) {
+      final pickup = pickups[i];
+      if (!pickupReached(pickup, rider)) continue;
+      pickups.removeAt(i);
       if (pickup.kind == PickupKind.fish) {
         caughtFish++;
         fish++;
@@ -284,20 +299,13 @@ class GameProvider extends ChangeNotifier {
         }
       }
     }
-    pickups = remainingPickups;
 
     var shieldBroke = false;
     var crashed = false;
-    final survivors = <Obstacle>[];
-    for (final obstacle in obstacles) {
-      if (!riderHitsObstacle(obstacle, rider)) {
-        survivors.add(obstacle);
-        continue;
-      }
-      if (invulnerable > 0) {
-        survivors.add(obstacle);
-        continue;
-      }
+    for (var i = obstacles.length - 1; i >= 0; i--) {
+      final obstacle = obstacles[i];
+      if (!riderHitsObstacle(obstacle, rider)) continue;
+      if (invulnerable > 0) continue;
       if (shieldCharges > 0) {
         shieldCharges--;
         invulnerable = AppConstants.shieldInvulnerable;
@@ -306,13 +314,11 @@ class GameProvider extends ChangeNotifier {
           AudioService().playShieldBreak();
         }
         LogService.info('护盾抵挡了 ${obstacle.kind.label}');
+        obstacles.removeAt(i);
         continue;
       }
       crashed = true;
       break;
-    }
-    if (!crashed) {
-      obstacles = survivors;
     }
 
     final score = distance.floor() + bonusScore;
@@ -353,31 +359,37 @@ class GameProvider extends ChangeNotifier {
     }
   }
 
-  Pickup _attract(Pickup pickup, RiderMotion rider, double dt) {
+  void _attract(Pickup pickup, RiderMotion rider, double dt) {
     final dx = WorldLayout.riderX - pickup.x;
     final targetHeight = rider.height + rider.bodyHeight / 2;
     final dy = targetHeight - pickup.y;
     final dz = WorldLayout.riderZ - pickup.z;
     final distance = sqrt(dx * dx + dy * dy + dz * dz);
-    if (distance > AppConstants.magnetRange || distance < 0.1) return pickup;
+    if (distance > AppConstants.magnetRange || distance < 0.1) return;
 
     final step = min(AppConstants.magnetSpeed * dt, distance);
-    return pickup.moveBy(
+    pickup.moveBy(
       dx / distance * step,
       dy: pickup.y + dy / distance * step,
       dz: pickup.z + dz / distance * step,
     );
   }
 
-  void _persistProgress(GameState state) {
-    if (state.highScore > _persistedHigh + 4) {
+  /// 进度落盘：默认 15 秒最多写一次，避免高速骑行时反复写磁盘。
+  void _persistProgress(GameState state, {bool force = false}) {
+    if (!force && _persistCooldown > 0) return;
+    var wrote = false;
+    if (state.highScore > _persistedHigh) {
       _persistedHigh = state.highScore;
       _storage.setHighScore(state.highScore);
+      wrote = true;
     }
-    if (state.bestDistance > _persistedBest + 5) {
+    if (state.bestDistance > _persistedBest) {
       _persistedBest = state.bestDistance;
       _storage.setBestDistance(state.bestDistance);
+      wrote = true;
     }
+    if (wrote) _persistCooldown = _persistInterval;
   }
 
   void _finishRun(GameState last) {

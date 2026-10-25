@@ -70,21 +70,29 @@ extension ObstacleKindInfo on ObstacleKind {
 /// 一个沿路面从右向左移动的障碍。
 ///
 /// [x] 是沿骑行方向的前缘坐标，[z] 是它所在的路面深度。
+/// 规则层每帧原地推进实体，避免在渲染循环里反复分配对象；
+/// 需要快照时请自行复制坐标，不要把实体当作不可变值使用。
 class Obstacle {
-  final int id;
-  final ObstacleKind kind;
-  final double x;
-  final double z;
-
-  const Obstacle({
+  Obstacle({
     required this.id,
     required this.kind,
     required this.x,
     this.z = 0,
   });
 
-  Obstacle moveBy(double dx) =>
-      Obstacle(id: id, kind: kind, x: x + dx, z: z);
+  final int id;
+  final ObstacleKind kind;
+
+  /// 沿骑行方向的前缘坐标，由 [moveBy] 原地推进。
+  double x;
+
+  final double z;
+
+  /// 原地平移并返回自身，方便链式判断是否已移出画面。
+  Obstacle moveBy(double dx) {
+    x += dx;
+    return this;
+  }
 
   double get right => x + kind.width;
 

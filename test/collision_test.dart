@@ -86,19 +86,19 @@ void main() {
 
   group('拾取判定', () {
     test('站立时能吃到胸口高度的小鱼', () {
-      const fish = Pickup(id: 1, kind: PickupKind.fish, x: riderX, y: 4.8);
+      final fish = Pickup(id: 1, kind: PickupKind.fish, x: riderX, y: 4.8);
       expect(pickupReached(fish, RiderMotion.grounded), isTrue);
     });
 
     test('高处的鱼需要跳跃', () {
-      const fish = Pickup(id: 1, kind: PickupKind.fish, x: riderX, y: 15);
+      final fish = Pickup(id: 1, kind: PickupKind.fish, x: riderX, y: 15);
       expect(pickupReached(fish, RiderMotion.grounded), isFalse);
       const jumping = RiderMotion(height: 11);
       expect(pickupReached(fish, jumping), isTrue);
     });
 
     test('横向远离时吃不到', () {
-      const fish = Pickup(
+      final fish = Pickup(
         id: 1,
         kind: PickupKind.fish,
         x: riderX + 10,
@@ -108,7 +108,7 @@ void main() {
     });
 
     test('深度错开时需要在同一骑行线上', () {
-      const fish = Pickup(
+      final fish = Pickup(
         id: 1,
         kind: PickupKind.fish,
         x: riderX,

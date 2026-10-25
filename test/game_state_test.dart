@@ -84,7 +84,7 @@ void main() {
 
   group('实体模型', () {
     test('障碍移动与离屏判定', () {
-      const obstacle = Obstacle(
+      final obstacle = Obstacle(
         id: 1,
         kind: ObstacleKind.rock,
         x: 10,
@@ -96,16 +96,16 @@ void main() {
       expect(moved.centerX, 5 + ObstacleKind.rock.width / 2);
       expect(moved.right, 5 + ObstacleKind.rock.width);
       expect(
-        const Obstacle(id: 2, kind: ObstacleKind.rock, x: -56).isOffscreen,
+        Obstacle(id: 2, kind: ObstacleKind.rock, x: -56).isOffscreen,
         isTrue,
       );
       // 回收线已后移：世界 x=-40 的障碍仍在画面内，不能被提前移除
       expect(
-        const Obstacle(id: 4, kind: ObstacleKind.rock, x: -40).isOffscreen,
+        Obstacle(id: 4, kind: ObstacleKind.rock, x: -40).isOffscreen,
         isFalse,
       );
       expect(
-        const Obstacle(id: 3, kind: ObstacleKind.rock, x: -20).isOffscreen,
+        Obstacle(id: 3, kind: ObstacleKind.rock, x: -20).isOffscreen,
         isFalse,
       );
     });
@@ -129,7 +129,7 @@ void main() {
     });
 
     test('拾取物移动保留类型、高度与深度', () {
-      const pickup = Pickup(
+      final pickup = Pickup(
         id: 3,
         kind: PickupKind.fish,
         x: 20,
