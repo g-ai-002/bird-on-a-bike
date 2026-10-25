@@ -123,7 +123,8 @@ class RideEntitiesComponent extends SceneLayerComponent {
           ? pickups[pickupIndex].z
           : double.negativeInfinity;
       final nextZ = math.max(obstacleZ, pickupZ);
-      if (!riderDrawn && nextZ < WorldLayout.riderZ) {
+      // 骑行者先画，z = 0 的障碍随后覆盖上来，正面对撞时能挡住单车。
+      if (!riderDrawn && nextZ <= WorldLayout.riderZ) {
         _paintRider(canvas, state);
         riderDrawn = true;
       }

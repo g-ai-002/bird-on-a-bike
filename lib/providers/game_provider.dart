@@ -195,7 +195,7 @@ class GameProvider extends ChangeNotifier {
           id: _nextId++,
           kind: kind,
           x: WorldLayout.obstacleSpawnX,
-          z: pickDepth(_random),
+          // z 默认 0，正是骑行者所在的骑行线，才能正面挡住单车。
         ),
       );
       _nextObstacleIn = obstacleGapForKind(

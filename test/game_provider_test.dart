@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:bird_on_a_bike/game/world_layout.dart';
 import 'package:bird_on_a_bike/models/difficulty.dart';
 import 'package:bird_on_a_bike/models/game_state.dart';
 import 'package:bird_on_a_bike/providers/game_provider.dart';
@@ -170,5 +171,26 @@ void main() {
     expect(game.state.status, GameStatus.paused);
     game.togglePause();
     expect(game.state.status, GameStatus.playing);
+  });
+
+  test('路面障碍固定在骑行者所在的深度线上', () async {
+    final storage = FakeStorageService.create();
+    final game = GameProvider(
+      storage,
+      random: Random(5),
+      audioEnabled: false,
+      scoreSink: (_) async {},
+    );
+    game.start();
+
+    var sawObstacle = false;
+    for (var i = 0; i < 60 * 12 && game.isPlaying; i++) {
+      game.advance(1 / 60);
+      for (final obstacle in game.state.obstacles) {
+        sawObstacle = true;
+        expect(obstacle.z, WorldLayout.riderZ);
+      }
+    }
+    expect(sawObstacle, isTrue);
   });
 }
