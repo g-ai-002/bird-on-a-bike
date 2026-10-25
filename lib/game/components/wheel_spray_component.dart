@@ -31,7 +31,13 @@ class WheelSprayComponent extends PositionComponent {
   void update(double dt) {
     super.update(dt);
     final state = provider.state;
-    if (state.isPlaying && dt > 0) {
+    final airborne = state.rider.airborne;
+    if (airborne) {
+      _drops.clear();
+      _emitAccumulator = 0;
+    }
+
+    if (state.isPlaying && !airborne && dt > 0) {
       _emitAccumulator += dt * (6 + state.speed * 0.25);
       while (_emitAccumulator >= 1) {
         _emitAccumulator -= 1;
