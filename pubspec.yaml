@@ -1,7 +1,7 @@
 name: bird_on_a_bike
 description: 鹈鹕骑单车 - 海风横版骑行躲避小游戏
 publish_to: 'none'
-version: 0.1.0
+version: 0.2.0
 
 environment:
   sdk: '>=3.13.5 <4.0.0'
