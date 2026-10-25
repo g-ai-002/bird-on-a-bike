@@ -6,7 +6,7 @@ class AppConstants {
   AppConstants._();
 
   static const String appName = '鹈鹕骑单车';
-  static const String version = '0.6.0';
+  static const String version = '0.7.0';
 
   static const String prefKeyDarkMode = 'dark_mode';
   static const String prefKeyHighScore = 'high_score';
