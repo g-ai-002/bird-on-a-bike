@@ -96,8 +96,13 @@ void main() {
       expect(moved.centerX, 5 + ObstacleKind.rock.width / 2);
       expect(moved.right, 5 + ObstacleKind.rock.width);
       expect(
-        const Obstacle(id: 2, kind: ObstacleKind.rock, x: -40).isOffscreen,
+        const Obstacle(id: 2, kind: ObstacleKind.rock, x: -56).isOffscreen,
         isTrue,
+      );
+      // 回收线已后移：世界 x=-40 的障碍仍在画面内，不能被提前移除
+      expect(
+        const Obstacle(id: 4, kind: ObstacleKind.rock, x: -40).isOffscreen,
+        isFalse,
       );
       expect(
         const Obstacle(id: 3, kind: ObstacleKind.rock, x: -20).isOffscreen,

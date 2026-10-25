@@ -54,8 +54,9 @@ class AppConstants {
   /// 障碍与拾取物在骑行线两侧的深度摆位幅度。
   static const double depthSpread = 1.2;
 
-  /// 越过骑行者之后的回收线。
-  static const double cullX = -30;
+  /// 越过骑行者之后的回收线：留到精灵完全离开画面再回收，
+  /// 避免障碍在镜头内突然消失。
+  static const double cullX = -48;
 
   /// 单次运行最多同时存在的实体数量，防止异常情况下无限增长。
   static const int maxObstacles = 12;
