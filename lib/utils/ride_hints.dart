@@ -1,8 +1,12 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 
 /// 当前是否运行在桌面平台；其余平台一律按触屏处理。
+///
+/// Web 端 `defaultTargetPlatform` 会按浏览器所在系统返回，桌面浏览器按桌面处理。
 bool get isDesktopPlatform =>
-    Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+    defaultTargetPlatform == TargetPlatform.windows ||
+    defaultTargetPlatform == TargetPlatform.macOS ||
+    defaultTargetPlatform == TargetPlatform.linux;
 
 /// 各界面展示的玩法提示：桌面端讲按键，移动端讲触屏手势。
 class RideHints {

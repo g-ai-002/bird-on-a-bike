@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -40,16 +38,15 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _loadLogDir() async {
     try {
-      final dir = await FileSystemService.instance.getLogRoot();
+      final path = await FileSystemService.instance.getLogRootPath();
       if (!mounted) return;
-      setState(() => _logDir = dir.path);
+      setState(() => _logDir = path);
     } catch (e, stack) {
       LogService.error('读取日志目录失败', e, stack);
     }
   }
 
-  bool get _canOpenDir =>
-      Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+  bool get _canOpenDir => isDesktopPlatform;
 
   @override
   Widget build(BuildContext context) {
