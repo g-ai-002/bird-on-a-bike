@@ -1,6 +1,5 @@
 import 'dart:ui';
 
-import '../../utils/constants.dart';
 import '../iso_projection.dart';
 import '../rendering/scenery_sprites.dart';
 import 'scene_layer_component.dart';
@@ -8,7 +7,8 @@ import 'scene_layer_component.dart';
 /// 贴近镜头的近景剪影：底边草丛与碎石。
 ///
 /// 比路面滚得更快（1.18 倍），用最暗的色块压住画面下沿，
-/// 让中景的等距路面产生纵深。草叶与碎石复用 [ScenerySprites] 的缓存。
+/// 让中景的等距路面产生纵深。草叶与碎石复用 [ScenerySprites] 的位图缓存；
+/// 只遍历当前可见区内的下标，缩放越大省下的绘制越多。
 class ShoreForegroundComponent extends SceneLayerComponent {
   ShoreForegroundComponent({required super.provider, super.priority});
 
@@ -41,10 +41,7 @@ class ShoreForegroundComponent extends SceneLayerComponent {
           IsoProjection.project(worldX, 0, IsoProjection.roadNearZ).dx;
       final tuftHeight = 16.0 + (index % 4) * 6.5;
       final tuftWidth = tuftHeight * 0.7;
-      if (!IsoProjection.isGroundSpriteVisible(
-        Offset(screenX, 0),
-        tuftWidth / 2 + 2,
-      )) {
+      if (!isVisibleAt(Offset(screenX, 0), tuftWidth / 2 + 2)) {
         continue;
       }
       ScenerySprites.drawGrass(
@@ -67,7 +64,7 @@ class ShoreForegroundComponent extends SceneLayerComponent {
       final screenX =
           IsoProjection.project(worldX, 0, IsoProjection.roadNearZ).dx;
       final size = 14.0 + (index % 3) * 6;
-      if (!IsoProjection.isGroundSpriteVisible(Offset(screenX, 0), size / 2)) {
+      if (!isVisibleAt(Offset(screenX, 0), size / 2)) {
         continue;
       }
       ScenerySprites.drawStone(
@@ -78,24 +75,18 @@ class ShoreForegroundComponent extends SceneLayerComponent {
     }
   }
 
-  /// 该深度上需要遍历的 index 区间：按画布左右边界反算并前后多留一格，
-  /// 使剪影在完全进入画面之前就已准备好，只有整块移出画面才停止绘制。
+  /// 该深度上需要遍历的 index 区间：由可见世界范围反算并前后各多留一格，
+  /// 使剪影在完全进入画面前就已准备好，只有整块移出画面才停止绘制。
   (int, int) _tileRange({
     required double gap,
     required double unitScroll,
     required double halfWidthPx,
   }) {
-    final left = IsoProjection.worldXAtScreenX(
-      -halfWidthPx,
-      IsoProjection.roadNearZ,
-    );
-    final right = IsoProjection.worldXAtScreenX(
-      AppConstants.worldWidth + halfWidthPx,
-      IsoProjection.roadNearZ,
-    );
+    final (left, right) = visibleWorldXRange(IsoProjection.roadNearZ);
+    final margin = halfWidthPx / IsoProjection.pxPerUnit;
     return (
-      ((left + unitScroll) / gap).floor() - 1,
-      ((right + unitScroll) / gap).ceil() + 1,
+      (((left - margin) + unitScroll) / gap).floor() - 1,
+      (((right + margin) + unitScroll) / gap).ceil() + 1,
     );
   }
 }

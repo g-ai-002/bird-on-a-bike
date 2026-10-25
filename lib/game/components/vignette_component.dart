@@ -6,7 +6,7 @@ import '../../utils/constants.dart';
 
 /// 屏幕边缘轻微压暗，让视线集中在鹈鹕与路面上。
 ///
-/// 径向渐变在加载时烘焙成半分辨率位图：渐变本身很平滑，放大看不出差别，
+/// 径向渐变在加载时按 1:1 烘焙成位图：渐变本身很平滑，不需要额外分辨率，
 /// 之后每帧只做一次贴图采样，不再重复计算全屏 shader。
 class VignetteComponent extends PositionComponent {
   VignetteComponent({super.priority})
@@ -15,7 +15,7 @@ class VignetteComponent extends PositionComponent {
         size: Vector2(AppConstants.worldWidth, AppConstants.worldHeight),
       );
 
-  static const double _rasterScale = 0.5;
+  static const double _rasterScale = 1.0;
 
   late final ui.Paint _shaderPaint = ui.Paint()
     ..shader = ui.Gradient.radial(
@@ -30,7 +30,7 @@ class VignetteComponent extends PositionComponent {
     );
 
   final ui.Paint _imagePaint = ui.Paint()
-    ..filterQuality = ui.FilterQuality.low;
+    ..filterQuality = ui.FilterQuality.medium;
 
   ui.Image? _image;
 

@@ -10,10 +10,17 @@ import 'scene_layer_component.dart';
 /// 黄昏海岸远景：渐变天空、落日、云、远山与海面。
 ///
 /// 每层按不同系数随骑行距离平移，形成视差滚动。天空、落日、灯塔与海面
-/// 是静态画面，首次渲染时烘焙成 [Picture] 复用；海浪只更新位置与预置的
-/// Paint，避免每帧重建渐变色。
+/// 是静态画面，按相机缩放烘焙成位图复用；云、山脊与波光各自烘焙成一条
+/// 可平铺的 [Picture]，每帧只做一次平移绘制，不再逐帧重建 [Path] 与圆。
 class SkyBackdropComponent extends SceneLayerComponent {
-  SkyBackdropComponent({required super.provider, super.priority});
+  SkyBackdropComponent({
+    required super.provider,
+    required this.rasterScale,
+    super.priority,
+  });
+
+  /// 世界坐标到物理像素的倍率（相机缩放 × 设备像素比），由游戏主循环提供。
+  final double Function() rasterScale;
 
   static const Color _cloud = Color(0xFFFFF4E2);
   static const Color _cloudShadeColor = Color(0xFFF3CDA6);
@@ -29,6 +36,11 @@ class SkyBackdropComponent extends SceneLayerComponent {
     _CloudSeed(1010, 62, 0.66),
   ];
 
+  static const double _cloudWrap = AppConstants.worldWidth + 320.0;
+  static const double _cloudOffsetX = 160.0;
+
+  final Paint _imagePaint = Paint()
+    ..filterQuality = FilterQuality.medium;
   final Paint _cloudBody = Paint()..color = _cloud.withValues(alpha: 0.8);
   final Paint _cloudShade = Paint()
     ..color = _cloudShadeColor.withValues(alpha: 0.35);
@@ -53,10 +65,6 @@ class SkyBackdropComponent extends SceneLayerComponent {
       ..strokeCap = StrokeCap.round;
   });
 
-  /// 静态层的栅格化倍率：远景都是低频渐变，1.5 倍已足够，
-  /// 换来的是每帧只做一次贴图采样，不再重复计算大面积渐变。
-  static const double _rasterScale = 1.5;
-
   /// 天空+落日与灯塔+海面各自的世界范围。
   ///
   /// 天空裁到海面之上、海面从灯塔光束顶端开始，避免两张贴图都覆盖整幅画面；
@@ -78,22 +86,52 @@ class SkyBackdropComponent extends SceneLayerComponent {
   Picture? _seaPicture;
   ui.Image? _skyImage;
   ui.Image? _seaImage;
-  final Paint _imagePaint = Paint()..filterQuality = FilterQuality.low;
+
+  Picture? _cloudPicture;
+  Picture? _ridgeFarPicture;
+  Picture? _ridgeNearPicture;
+  final List<Picture> _waveRowPictures = <Picture>[];
+
+  double _imageBucket = 0;
+  bool _imagesReady = false;
 
   double _elapsed = 0;
 
   @override
   Future<void> onLoad() async {
-    _skyPicture = _recordRegion(_skyRegion, (canvas) {
+    _skyPicture = _record((canvas) {
       _paintSky(canvas);
       _paintSun(canvas);
     });
-    _seaPicture = _recordRegion(_seaRegion, (canvas) {
+    _seaPicture = _record((canvas) {
       _paintLighthouse(canvas);
       _paintSea(canvas);
     });
-    _skyImage = _rasterize(_skyPicture!, _skyRegion);
-    _seaImage = _rasterize(_seaPicture!, _seaRegion);
+    _cloudPicture = _record(_paintCloudStrip);
+    _ridgeFarPicture = _record(
+      (canvas) => _paintRidge(
+        canvas,
+        baseY: IsoProjection.horizonY + 4,
+        period: 300,
+        peak: 54,
+        phase: 1.2,
+        paint: _ridgeFar,
+      ),
+    );
+    _ridgeNearPicture = _record(
+      (canvas) => _paintRidge(
+        canvas,
+        baseY: IsoProjection.horizonY + 8,
+        period: 214,
+        peak: 36,
+        phase: 3.4,
+        paint: _ridgeNear,
+      ),
+    );
+    for (var row = 0; row < _wavePaints.length; row++) {
+      final index = row;
+      _waveRowPictures.add(_record((canvas) => _paintWaveRow(canvas, index)));
+    }
   }
 
   @override
@@ -102,10 +140,20 @@ class SkyBackdropComponent extends SceneLayerComponent {
     _seaImage?.dispose();
     _skyPicture?.dispose();
     _seaPicture?.dispose();
+    _cloudPicture?.dispose();
+    _ridgeFarPicture?.dispose();
+    _ridgeNearPicture?.dispose();
+    for (final picture in _waveRowPictures) {
+      picture.dispose();
+    }
+    _waveRowPictures.clear();
     _skyImage = null;
     _seaImage = null;
     _skyPicture = null;
     _seaPicture = null;
+    _cloudPicture = null;
+    _ridgeFarPicture = null;
+    _ridgeNearPicture = null;
     super.onRemove();
   }
 
@@ -122,31 +170,64 @@ class SkyBackdropComponent extends SceneLayerComponent {
     final state = provider.state;
     final travel = IsoProjection.travelPixels(state.distance);
 
+    _ensureImages();
     _drawStaticLayer(canvas, _skyImage, _skyPicture!, _skyRegion);
-    _paintClouds(canvas, travel);
-    _paintRidges(canvas, travel);
+
+    final drift = travel * 0.08 + _elapsed * 3.5;
+    final cloudShift = -(drift % _cloudWrap);
+    final bob = math.sin(_elapsed * 0.35) * 1.5;
+    _drawStrip(canvas, _cloudPicture!, cloudShift, y: bob);
+    _drawStrip(canvas, _cloudPicture!, cloudShift + _cloudWrap, y: bob);
+
+    _drawStrip(canvas, _ridgeFarPicture!, -(travel * 0.16) % 300);
+    _drawStrip(canvas, _ridgeNearPicture!, -(travel * 0.28) % 214);
+
     _drawStaticLayer(canvas, _seaImage, _seaPicture!, _seaRegion);
     _paintWaveGlints(canvas, travel);
   }
 
-  /// 在 [region] 里录制静态层：先按栅格倍率放大，再平移到区域左上角。
-  Picture _recordRegion(Rect region, void Function(Canvas canvas) painter) {
+  void _drawStrip(Canvas canvas, Picture picture, double shift, {double y = 0}) {
+    canvas.save();
+    canvas.translate(shift, y);
+    canvas.drawPicture(picture);
+    canvas.restore();
+  }
+
+  Picture _record(void Function(Canvas canvas) painter) {
     final recorder = PictureRecorder();
     final canvas = Canvas(recorder);
-    canvas.scale(_rasterScale);
-    canvas.translate(-region.left, -region.top);
     painter(canvas);
     return recorder.endRecording();
   }
 
-  ui.Image? _rasterize(Picture picture, Rect region) {
+  /// 静态层的位图按相机缩放重建：窗口放大或移到高 DPI 屏后仍然清晰。
+  void _ensureImages() {
+    final bucket = (rasterScale() * 4).round() / 4;
+    if (_imagesReady && bucket == _imageBucket) return;
+    _skyImage?.dispose();
+    _seaImage?.dispose();
+    _skyImage = _rasterize(_skyPicture!, _skyRegion, bucket);
+    _seaImage = _rasterize(_seaPicture!, _seaRegion, bucket);
+    _imageBucket = bucket;
+    // Web 的 HTML 渲染器不支持 toImageSync，失败后不再逐帧重试。
+    _imagesReady = true;
+  }
+
+  ui.Image? _rasterize(Picture picture, Rect region, double scale) {
     try {
-      return picture.toImageSync(
-        (region.width * _rasterScale).round(),
-        (region.height * _rasterScale).round(),
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+      canvas.scale(scale);
+      canvas.translate(-region.left, -region.top);
+      canvas.drawPicture(picture);
+      final rasterized = recorder.endRecording();
+      final image = rasterized.toImageSync(
+        (region.width * scale).round(),
+        (region.height * scale).round(),
       );
+      rasterized.dispose();
+      return image;
     } catch (_) {
-      // Web 的 HTML 渲染器不支持 toImageSync，退回每帧绘制矢量 Picture。
       return null;
     }
   }
@@ -166,11 +247,7 @@ class SkyBackdropComponent extends SceneLayerComponent {
       );
       return;
     }
-    canvas.save();
-    canvas.translate(region.left, region.top);
-    canvas.scale(1 / _rasterScale);
     canvas.drawPicture(picture);
-    canvas.restore();
   }
 
   void _paintSky(Canvas canvas) {
@@ -300,14 +377,12 @@ class SkyBackdropComponent extends SceneLayerComponent {
     );
   }
 
-  void _paintClouds(Canvas canvas, double travel) {
-    const wrap = AppConstants.worldWidth + 320.0;
-    final drift = travel * 0.08 + _elapsed * 3.5;
+  /// 六朵云的基准位置；水平漂移在绘制时整体平移这条平铺带。
+  void _paintCloudStrip(Canvas canvas) {
     for (final seed in _clouds) {
-      final x = (seed.x - drift) % wrap - 160;
       _paintCloud(
         canvas,
-        Offset(x, seed.y + math.sin(_elapsed * 0.35 + seed.x) * 2),
+        Offset(seed.x - _cloudOffsetX, seed.y),
         seed.scale,
       );
     }
@@ -338,54 +413,28 @@ class SkyBackdropComponent extends SceneLayerComponent {
     );
   }
 
-  void _paintRidges(Canvas canvas, double travel) {
-    _paintRidge(
-      canvas,
-      travel: travel,
-      speed: 0.16,
-      baseY: IsoProjection.horizonY + 4,
-      period: 300,
-      peak: 54,
-      phase: 1.2,
-      paint: _ridgeFar,
-    );
-    _paintRidge(
-      canvas,
-      travel: travel,
-      speed: 0.28,
-      baseY: IsoProjection.horizonY + 8,
-      period: 214,
-      peak: 36,
-      phase: 3.4,
-      paint: _ridgeNear,
-    );
-  }
-
   void _paintRidge(
     Canvas canvas, {
-    required double travel,
-    required double speed,
     required double baseY,
     required double period,
     required double peak,
     required double phase,
     required Paint paint,
   }) {
-    final offset = (travel * speed) % period;
     final path = Path()..moveTo(-period, baseY);
     var i = -1;
-    while (i * period - offset < width + period) {
-      final x = i * period - offset;
+    while (i * period < width + period) {
+      final x = i * period;
       final h = peak * (0.5 + 0.5 * math.sin(i * 1.7 + phase).abs());
       path
         ..lineTo(x, baseY)
         ..quadraticBezierTo(x + period * 0.5, baseY - h * 1.7, x + period, baseY);
       i++;
     }
+    // 山脊只需要填到自身基准线：更下方的部分随后会被海面位图盖住。
     path
-      ..lineTo(width + period, baseY)
-      ..lineTo(width + period, height)
-      ..lineTo(-period, height)
+      ..lineTo(width + period, baseY + 2)
+      ..lineTo(-period, baseY + 2)
       ..close();
     canvas.drawPath(path, paint);
   }
@@ -468,27 +517,35 @@ class SkyBackdropComponent extends SceneLayerComponent {
     );
   }
 
+  /// 单行波光烘焙成一条平铺带：一屏宽度再多一格，平移后不会露缝。
+  void _paintWaveRow(Canvas canvas, int row) {
+    final rows = _wavePaints.length;
+    final t = (row + 1) / (rows + 1);
+    final y = _waveTop + (_waveBottom - _waveTop) * t;
+    final span = 9.0 + t * 24;
+    final gap = 84.0 + t * 72;
+    final paint = _wavePaints[row];
+    for (var x = 0.0; x < width + gap; x += gap) {
+      canvas.drawLine(Offset(x, y), Offset(x + span, y), paint);
+    }
+  }
+
+  static const double _waveTop = IsoProjection.horizonY + 6;
+  static double get _waveBottom => IsoProjection.seaEdgeY - 6;
+
   void _paintWaveGlints(Canvas canvas, double travel) {
-    const top = IsoProjection.horizonY + 6;
-    final bottom = IsoProjection.seaEdgeY - 6;
-    const rows = 8;
-    for (var row = 0; row < rows; ++row) {
+    final rows = _wavePaints.length;
+    for (var row = 0; row < rows; row++) {
       final t = (row + 1) / (rows + 1);
-      final y = top + (bottom - top) * t;
-      final span = 9.0 + t * 24;
       final gap = 84.0 + t * 72;
       final offset =
           (travel * (0.16 + t * 0.34) + _elapsed * (4 + t * 9)) % gap;
-      final paint = _wavePaints[row];
-      for (var i = -1; i * gap - offset < width + gap; i++) {
-        final x = i * gap - offset;
-        canvas.drawLine(Offset(x, y), Offset(x + span, y), paint);
-      }
+      _drawStrip(canvas, _waveRowPictures[row], -offset);
     }
 
     final centerX = width * 0.78;
     for (var i = 0; i < 9; i++) {
-      final y = top + 4 + i * 11;
+      final y = _waveTop + 4 + i * 11;
       final w = 16.0 + i * 9 + math.sin(_elapsed * 1.4 + i) * 4;
       canvas.drawLine(
         Offset(centerX - w / 2, y),
@@ -497,8 +554,8 @@ class SkyBackdropComponent extends SceneLayerComponent {
       );
     }
     canvas.drawLine(
-      Offset(centerX - 30, bottom - 6),
-      Offset(centerX + 30, bottom - 6),
+      Offset(centerX - 30, _waveBottom),
+      Offset(centerX + 30, _waveBottom),
       _reflectionCore,
     );
   }

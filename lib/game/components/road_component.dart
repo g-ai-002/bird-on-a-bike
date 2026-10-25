@@ -9,14 +9,19 @@ import 'scene_layer_component.dart';
 /// 等距路面：单向单车道沥青带、沙石路肩、海岸沙带与沿路植被。
 ///
 /// 静态路面（路肩、沥青、沙带、边线）首次渲染时烘焙成一张 [Picture]；
-/// 行车箭头单独烘焙并按骑行距离平移；草丛、碎石与椰树来自
-/// [ScenerySprites] 的缓存精灵，只有整块移出画布才停止绘制。
+/// 泡沫、横向接缝与行车箭头各自烘焙成一条可平铺的 [Picture]，每帧只做一次
+/// 平移绘制，不再逐条构造 [Path]；草丛、碎石与椰树来自 [ScenerySprites]
+/// 的位图精灵，只有整块移出可见区才停止绘制。
 class RoadComponent extends SceneLayerComponent {
   RoadComponent({required super.provider, super.priority});
 
   static const double _xNear = -70;
   static const double _xFar = 70;
   static const double _arrowPeriod = 15;
+
+  /// 泡沫与接缝平铺条带的宽度：画幅宽度再留一个周期，平移后不会露出缝隙。
+  static const double _foamSpan = AppConstants.worldWidth + 50;
+  static const double _seamSpan = AppConstants.worldWidth + 280;
 
   final Paint _foamPaint = Paint()
     ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.4);
@@ -27,6 +32,21 @@ class RoadComponent extends SceneLayerComponent {
 
   Picture? _staticPicture;
   Picture? _arrowPicture;
+  Picture? _foamPicture;
+  Picture? _seamPicture;
+
+  @override
+  void onRemove() {
+    _staticPicture?.dispose();
+    _arrowPicture?.dispose();
+    _foamPicture?.dispose();
+    _seamPicture?.dispose();
+    _staticPicture = null;
+    _arrowPicture = null;
+    _foamPicture = null;
+    _seamPicture = null;
+    super.onRemove();
+  }
 
   @override
   void render(Canvas canvas) {
@@ -36,16 +56,24 @@ class RoadComponent extends SceneLayerComponent {
     final unitScroll = travel / IsoProjection.pxPerUnit;
 
     canvas.drawPicture(_staticPicture!);
-    _paintFoam(canvas, unitScroll);
+
+    final foamShift = (unitScroll * 0.9) % 5.0 * IsoProjection.pxPerUnit;
+    _drawStrip(canvas, _foamPicture!, -foamShift);
 
     final arrowShift = (unitScroll % _arrowPeriod) * IsoProjection.pxPerUnit;
-    canvas.save();
-    canvas.translate(-arrowShift, 0);
-    canvas.drawPicture(_arrowPicture!);
-    canvas.restore();
+    _drawStrip(canvas, _arrowPicture!, -arrowShift);
 
-    _paintCrossSeams(canvas, unitScroll);
+    final seamShift = (unitScroll % 28.0) * IsoProjection.pxPerUnit;
+    _drawStrip(canvas, _seamPicture!, -seamShift);
+
     _paintShoreProps(canvas, unitScroll);
+  }
+
+  void _drawStrip(Canvas canvas, Picture picture, double shift) {
+    canvas.save();
+    canvas.translate(shift, 0);
+    canvas.drawPicture(picture);
+    canvas.restore();
   }
 
   void _ensureStatic() {
@@ -58,6 +86,8 @@ class RoadComponent extends SceneLayerComponent {
       _paintEdgeLines(canvas);
     });
     _arrowPicture = _record(_paintLaneArrows);
+    _foamPicture = _record(_paintFoamStrip);
+    _seamPicture = _record(_paintSeamStrip);
   }
 
   Picture _record(void Function(Canvas canvas) painter) {
@@ -154,22 +184,25 @@ class RoadComponent extends SceneLayerComponent {
     );
   }
 
-  void _paintFoam(Canvas canvas, double unitScroll) {
-    const seaZ = IsoProjection.seaEdgeZ;
-    final foamShift = (unitScroll * 0.9) % 5.0;
-    for (var i = -14; i <= 14; i++) {
-      final x = i * 5.0 - foamShift;
-      final start = IsoProjection.project(x, 0, seaZ).dx;
-      final mid = IsoProjection.project(x + 2.4, 0, seaZ + 0.16).dx;
-      final end = IsoProjection.project(x + 5.0, 0, seaZ).dx;
-      final path = Path()
-        ..moveTo(start, IsoProjection.seaEdgeY)
-        ..quadraticBezierTo(mid, IsoProjection.seaEdgeY - 2.2, end,
-            IsoProjection.seaEdgeY)
-        ..lineTo(end, IsoProjection.seaEdgeY + 2.4)
-        ..lineTo(start, IsoProjection.seaEdgeY + 2.4)
-        ..close();
-      canvas.drawPath(path, _foamPaint);
+  /// 一条 50 像素宽的海水泡沫，从 [screenX] 开始。
+  ///
+  /// 直接按屏幕坐标构造，避免平铺烘焙时反复调用投影。
+  Path _foamPathAt(double screenX) {
+    final midX =
+        screenX + 2.4 * IsoProjection.pxPerUnit + 0.16 * IsoProjection.depthSlantX;
+    final endX = screenX + 5.0 * IsoProjection.pxPerUnit;
+    final y = IsoProjection.seaEdgeY;
+    return Path()
+      ..moveTo(screenX, y)
+      ..quadraticBezierTo(midX, y - 2.2, endX, y)
+      ..lineTo(endX, y + 2.4)
+      ..lineTo(screenX, y + 2.4)
+      ..close();
+  }
+
+  void _paintFoamStrip(Canvas canvas) {
+    for (var x = 0.0; x <= _foamSpan; x += 50) {
+      canvas.drawPath(_foamPathAt(x), _foamPaint);
     }
   }
 
@@ -202,49 +235,54 @@ class RoadComponent extends SceneLayerComponent {
 
   /// 单行道的地面箭头，指向骑行前进方向（画面右侧）。
   void _paintLaneArrows(Canvas canvas) {
-    for (var i = -14; i <= 14; i++) {
-      canvas.drawPath(_arrowPath(i * _arrowPeriod), _arrowPaint);
+    for (var x = 0.0; x <= _foamSpan; x += _arrowPeriod * IsoProjection.pxPerUnit) {
+      canvas.drawPath(_arrowPathAt(x), _arrowPaint);
     }
   }
 
-  Path _arrowPath(double x) {
-    final tail = x;
-    final neck = x + 2.0;
-    final tip = x + 3.8;
+  Path _arrowPathAt(double screenX) {
+    Offset point(double dx, double z) => Offset(
+      screenX + dx * IsoProjection.pxPerUnit + z * IsoProjection.depthSlantX,
+      AppConstants.groundY - z * IsoProjection.depthSlantY,
+    );
     return Path()
       ..addPolygon(<Offset>[
-        IsoProjection.project(tail, 0, -0.34),
-        IsoProjection.project(neck, 0, -0.34),
-        IsoProjection.project(neck, 0, -1.15),
-        IsoProjection.project(tip, 0, 0),
-        IsoProjection.project(neck, 0, 1.15),
-        IsoProjection.project(neck, 0, 0.34),
-        IsoProjection.project(tail, 0, 0.34),
+        point(0, -0.34),
+        point(2.0, -0.34),
+        point(2.0, -1.15),
+        point(3.8, 0),
+        point(2.0, 1.15),
+        point(2.0, 0.34),
+        point(0, 0.34),
       ], true);
   }
 
-  void _paintCrossSeams(Canvas canvas, double unitScroll) {
-    const period = 28.0;
-    final offset = unitScroll % period;
-    for (var i = -3; i <= 4; i++) {
-      final x = i * period - offset;
-      canvas.drawPath(
-        _quad(
-          x,
-          x + 0.16,
-          -IsoProjection.laneHalfZ,
-          IsoProjection.laneHalfZ,
-        ),
-        _seamPaint,
-      );
+  /// 一条横跨车道的接缝，从屏幕坐标 [screenX] 开始。
+  Path _seamPathAt(double screenX) {
+    Offset point(double dx, double z) => Offset(
+      screenX + dx * IsoProjection.pxPerUnit + z * IsoProjection.depthSlantX,
+      AppConstants.groundY - z * IsoProjection.depthSlantY,
+    );
+    return Path()
+      ..addPolygon(<Offset>[
+        point(0, -IsoProjection.laneHalfZ),
+        point(0.16, -IsoProjection.laneHalfZ),
+        point(0.16, IsoProjection.laneHalfZ),
+        point(0, IsoProjection.laneHalfZ),
+      ], true);
+  }
+
+  void _paintSeamStrip(Canvas canvas) {
+    for (var x = 0.0; x <= _seamSpan; x += 280) {
+      canvas.drawPath(_seamPathAt(x), _seamPaint);
     }
   }
 
   /// 沿路装饰需要遍历的 index 区间。
   ///
-  /// 世界 x = index * gap - unitScroll + offset；区间由画布左右边界反算，
+  /// 世界 x = index * gap - unitScroll + offset；区间由当前可见的世界范围反算，
   /// 前后各多留一格，保证精灵在完全进入画面前就已准备好，
-  /// 而是否真正绘制仍由 [IsoProjection.isGroundSpriteVisible] 决定。
+  /// 而是否真正绘制仍由 [isVisibleAt] 决定。
   (int, int) _tileRange({
     required double gap,
     required double unitScroll,
@@ -252,14 +290,11 @@ class RoadComponent extends SceneLayerComponent {
     required double halfWidthPx,
     double offset = 0,
   }) {
-    final left = IsoProjection.worldXAtScreenX(-halfWidthPx, z);
-    final right = IsoProjection.worldXAtScreenX(
-      AppConstants.worldWidth + halfWidthPx,
-      z,
-    );
+    final (left, right) = visibleWorldXRange(z);
+    final margin = halfWidthPx / IsoProjection.pxPerUnit;
     return (
-      ((left + unitScroll - offset) / gap).floor() - 1,
-      ((right + unitScroll - offset) / gap).ceil() + 1,
+      (((left - margin) + unitScroll - offset) / gap).floor() - 1,
+      (((right + margin) + unitScroll - offset) / gap).ceil() + 1,
     );
   }
 
@@ -276,7 +311,7 @@ class RoadComponent extends SceneLayerComponent {
       final z = 7.9 + (index % 3) * 0.35;
       final height = 12.0 + (index % 4) * 3.5;
       final base = IsoProjection.project(worldX, 0, z);
-      if (!IsoProjection.isGroundSpriteVisible(base, height * 0.31 + 2)) {
+      if (!isVisibleAt(base, height * 0.31 + 2)) {
         continue;
       }
       ScenerySprites.drawGrass(
@@ -298,7 +333,7 @@ class RoadComponent extends SceneLayerComponent {
       final worldX = index * stoneGap - unitScroll;
       final base = IsoProjection.project(worldX, 0, 8.15 + (index % 2) * 0.4);
       final size = 9.0 + (index % 3) * 3.5;
-      if (!IsoProjection.isGroundSpriteVisible(base, size / 2 + 2)) continue;
+      if (!isVisibleAt(base, size / 2 + 2)) continue;
       ScenerySprites.drawStone(
         canvas,
         base,
@@ -320,13 +355,13 @@ class RoadComponent extends SceneLayerComponent {
       final worldX = index * palmGap - unitScroll + palmOffset;
       final scale = index.isEven ? 1.0 : 0.82;
       final base = IsoProjection.project(worldX, 0, 8.6);
-      if (!IsoProjection.isGroundSpriteVisible(
+      if (!isVisibleAt(
         base,
         ScenerySprites.palmSize.width * scale / 2 + 4,
       )) {
         continue;
       }
-      ScenerySprites.palm(index).render(canvas, base, scale: scale);
+      ScenerySprites.drawPalm(canvas, base, scale: scale, variant: index);
     }
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
@@ -63,6 +64,13 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
   /// 把 800×450 的世界铺满画布所需的缩放（cover）。
   double _baseZoom = 1;
 
+  /// 物理像素与逻辑像素之比：静态图层按 [rasterScale] 烘焙，保证放大后仍清晰。
+  double _devicePixelRatio = 1;
+
+  /// 世界坐标到物理像素的倍率；上限 3 倍，避免窗口特别大时纹理占用失控。
+  double get rasterScale =>
+      (_baseZoom * _devicePixelRatio).clamp(1.0, 3.0).toDouble();
+
   bool _ready = false;
   GameStatus _lastStatus = GameStatus.idle;
 
@@ -99,7 +107,11 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
     _spray = WheelSprayComponent(provider: provider, priority: 9);
 
     final scene = <Component>[
-      SkyBackdropComponent(provider: provider, priority: -50),
+      SkyBackdropComponent(
+        provider: provider,
+        rasterScale: () => rasterScale,
+        priority: -50,
+      ),
       SeaLifeComponent(provider: provider, priority: -45),
       RoadComponent(provider: provider, priority: -40),
       RideEntitiesComponent(provider: provider, priority: 0),
@@ -123,6 +135,7 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
     );
     camera.viewport.add(_gestures);
 
+    _updateDevicePixelRatio();
     _updateBaseZoom(size);
     camera.viewfinder.position = _cameraBase;
     camera.viewfinder.zoom = _baseZoom;
@@ -132,9 +145,21 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
   @override
   void onGameResize(Vector2 size) {
     super.onGameResize(size);
+    _updateDevicePixelRatio();
     _updateBaseZoom(size);
     camera.viewfinder.position = _cameraBase;
     camera.viewfinder.zoom = _baseZoom;
+  }
+
+  void _updateDevicePixelRatio() {
+    try {
+      final views = ui.PlatformDispatcher.instance.views;
+      if (views.isNotEmpty) {
+        _devicePixelRatio = views.first.devicePixelRatio;
+      }
+    } catch (_) {
+      _devicePixelRatio = 1;
+    }
   }
 
   void _updateBaseZoom(Vector2 canvasSize) {
