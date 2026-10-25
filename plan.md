@@ -40,9 +40,26 @@
 
 ## 版本历史
 
-### v0.5.0 (MINOR) — 当前开发中
+### v0.6.0 (MINOR) — 当前开发中
 
 - **状态**: 已在本机执行 `flutter pub get` / `flutter analyze` / `flutter test`
+- **目标**: 跑通 Web 平台并补齐发布链路，同时压低每帧的绘制与分配开销
+- **任务**:
+  - [x] Web 适配：条件导入隔离 `dart:io` / `path_provider` / `window_manager`，Web 端日志走内存
+  - [x] GitHub Actions 新增 Web 构建，按 tag 发布到 `gh-pages` 的子目录，历史版本共存
+  - [x] 非 tag 触发把 Web 站点发到 `debug/` 预览目录，tag 触发把 `-web.zip` 归档进 Release
+  - [x] 版本索引页模板 `.github/pages/index.template.html` 与 `versions.json` 自动生成
+  - [x] 跃鱼落水浪花与波纹改为鱼真正入水后才出现，补入水时序单测
+  - [x] 音效与 BGM 合成移到后台 isolate，BGM 按需生成，Web 端退回同步
+  - [x] 日志落盘改为异步串行队列，新增 `LogService.flush()` 供测试与退出前等待
+  - [x] 障碍与拾取物原地推进，拾取/撞击倒序删除，进度落盘加 15 秒冷却
+  - [x] 骑行者拆静态层与动态层，天空、海面、暗角与光晕各自烘焙成位图
+  - [x] 版本号 0.5.0 → 0.6.0
+  - [x] 更新 README / plan / versions
+
+### v0.5.0 (MINOR)
+
+- **状态**: 已发布 ✅
 - **目标**: 去掉 flutter_scene 依赖，改用纯 Flame 技术栈做固定机位的 2.5D 海岸地图
 - **任务**:
   - [x] 新增 `IsoProjection`：等距斜视投影、深度排序与米到像素的滚动换算
@@ -73,10 +90,6 @@
   - [x] 海面远景偶尔有鱼跃出水面，位置远离近岸沙滩
   - [x] 首页滚动视图铺满整页，滚动条贴到窗口最右侧
   - [x] 玩法提示补齐上滑跳跃，脚踏板加大、眼珠朝向前方
-  - [x] Web 适配：条件导入隔离 `dart:io` / `path_provider` / `window_manager`，Web 端日志走内存
-  - [x] GitHub Actions 新增 Web 构建，按 tag 发布到 `gh-pages` 的子目录，历史版本共存
-  - [x] 非 tag 触发把 Web 站点发到 `debug/` 预览目录，tag 触发把 `-web.zip` 归档进 Release
-  - [x] 版本索引页模板 `.github/pages/index.template.html` 与 `versions.json` 自动生成
   - [x] 版本号 0.4.0 → 0.5.0
   - [x] 更新 README / plan / versions
 

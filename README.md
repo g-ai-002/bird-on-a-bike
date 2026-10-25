@@ -55,7 +55,7 @@
 
 ## 下载
 
-最新版本 `v0.5.0` 将通过 GitHub Actions 与 Gitea Actions 自动构建：
+最新版本 `v0.6.0` 将通过 GitHub Actions 与 Gitea Actions 自动构建：
 
 - Android APK（arm64-v8a）
 - Windows ZIP（x86-64）
@@ -69,7 +69,7 @@
 各版本互不覆盖，历史版本长期保留：
 
 - 版本列表：<https://g-ai-002.github.io/bird-on-a-bike/>
-- 当前版本：<https://g-ai-002.github.io/bird-on-a-bike/v0.5.0/>
+- 当前版本：<https://g-ai-002.github.io/bird-on-a-bike/v0.6.0/>
 - 预览版：<https://g-ai-002.github.io/bird-on-a-bike/debug/>
 
 非 tag 触发（手动运行 `Build & Release` 工作流）构建出来的站点会发到 `debug/`
@@ -106,7 +106,7 @@ flutter create --platforms=windows,web --project-name bird_on_a_bike .
 
 ```bash
 flutter run -d chrome
-flutter build web --release --base-href /bird-on-a-bike/v0.5.0/
+flutter build web --release --base-href /bird-on-a-bike/v0.6.0/
 ```
 
 ### 渲染结构
@@ -137,11 +137,11 @@ flutter test
 - Gitea Actions：Android APK、Windows ZIP，并创建 Gitea Release
 
 ```bash
-git tag v0.5.0
-git push origin v0.5.0
+git tag v0.6.0
+git push origin v0.6.0
 ```
 
-Web 版按 tag 分目录保存在 `gh-pages` 分支（`v0.5.0/`、`v0.4.0/` …），根目录的
+Web 版按 tag 分目录保存在 `gh-pages` 分支（`v0.6.0/`、`v0.5.0/` …），根目录的
 版本索引页由 `.github/pages/index.template.html` 渲染，每次发布都会重新生成版本列表；
 非 tag 运行（手动触发）写入 `debug/` 目录、不碰已有版本，同一时刻只允许一个
 Web 发布任务写 `gh-pages`，避免并发覆盖。
