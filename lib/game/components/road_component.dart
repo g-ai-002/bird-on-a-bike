@@ -19,6 +19,9 @@ class RoadComponent extends SceneLayerComponent {
   static const double _xFar = 70;
   static const double _arrowPeriod = 15;
 
+  /// 相邻两个地面箭头的屏幕间距。
+  static const double _arrowSpacing = _arrowPeriod * IsoProjection.pxPerUnit;
+
   /// 泡沫与接缝平铺条带的宽度：画幅宽度再留一个周期，平移后不会露出缝隙。
   static const double _foamSpan = AppConstants.worldWidth + 50;
   static const double _seamSpan = AppConstants.worldWidth + 280;
@@ -61,7 +64,7 @@ class RoadComponent extends SceneLayerComponent {
     _drawStrip(canvas, _foamPicture!, -foamShift);
 
     final arrowShift = (unitScroll % _arrowPeriod) * IsoProjection.pxPerUnit;
-    _drawStrip(canvas, _arrowPicture!, -arrowShift);
+    _paintArrowRow(canvas, arrowShift);
 
     final seamShift = (unitScroll % 28.0) * IsoProjection.pxPerUnit;
     _drawStrip(canvas, _seamPicture!, -seamShift);
@@ -234,9 +237,24 @@ class RoadComponent extends SceneLayerComponent {
   }
 
   /// 单行道的地面箭头，指向骑行前进方向（画面右侧）。
+  ///
+  /// 只烘焙一个箭头，绘制时按 [_arrowSpacing] 平铺：右侧始终有下一个箭头
+  /// 等在画面外，不会等它进入画面才突然出现。
   void _paintLaneArrows(Canvas canvas) {
-    for (var x = 0.0; x <= _foamSpan; x += _arrowPeriod * IsoProjection.pxPerUnit) {
-      canvas.drawPath(_arrowPathAt(x), _arrowPaint);
+    canvas.drawPath(_arrowPathAt(0), _arrowPaint);
+  }
+
+  /// 箭头间距（屏幕像素）。
+  static double get arrowSpacing => _arrowSpacing;
+
+  /// 一屏需要绘制的箭头数量：末尾多留两个，平移一个周期后右端仍有箭头待入。
+  static int arrowRowCount(double worldWidth) =>
+      (worldWidth / _arrowSpacing).ceil() + 2;
+
+  void _paintArrowRow(Canvas canvas, double shift) {
+    final count = arrowRowCount(AppConstants.worldWidth);
+    for (var i = 0; i < count; i++) {
+      _drawStrip(canvas, _arrowPicture!, i * _arrowSpacing - shift);
     }
   }
 
