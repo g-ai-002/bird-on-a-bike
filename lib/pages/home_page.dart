@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../providers/game_provider.dart';
 import '../providers/settings_provider.dart';
 import '../utils/constants.dart';
+import '../utils/ride_hints.dart';
 import '../widgets/pelican_badge.dart';
 import 'game_page.dart';
 import 'leaderboard_page.dart';
@@ -156,7 +157,7 @@ class HomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    '点击或空格跳跃，二段跳够高；下滑或 ↓ 俯身穿过横幅',
+                    RideHints.home,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: colors.onSurfaceVariant,

@@ -11,6 +11,7 @@ import '../providers/settings_provider.dart';
 import '../services/file_system_service.dart';
 import '../services/log_service.dart';
 import '../utils/constants.dart';
+import '../utils/ride_hints.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -106,21 +107,7 @@ class _SettingsPageState extends State<SettingsPage> {
           }),
           const Divider(),
           const _SectionHeader(title: '玩法'),
-          const ListTile(
-            leading: Icon(Icons.keyboard_arrow_up),
-            title: Text('跳跃与二段跳'),
-            subtitle: Text('空格 / ↑ / W 起跳，空中再按一次可二段跳；松开按键跳得更矮'),
-          ),
-          const ListTile(
-            leading: Icon(Icons.keyboard_arrow_down),
-            title: Text('俯身'),
-            subtitle: Text('↓ / S 按住俯身，穿过低垂的横幅；空中俯身会快速下落'),
-          ),
-          const ListTile(
-            leading: Icon(Icons.touch_app_outlined),
-            title: Text('触屏操作'),
-            subtitle: Text('点击跳跃，下滑俯身'),
-          ),
+          ..._buildPlayHints(),
           const Divider(),
           const _SectionHeader(title: '关于'),
           ListTile(
@@ -147,6 +134,29 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
     );
+  }
+
+  /// 玩法说明按平台切换：桌面讲按键，移动端讲触屏手势。
+  List<Widget> _buildPlayHints() {
+    final jumpIcon =
+        isDesktopPlatform ? Icons.keyboard_arrow_up : Icons.touch_app_outlined;
+    return <Widget>[
+      ListTile(
+        leading: Icon(jumpIcon),
+        title: const Text('跳跃与二段跳'),
+        subtitle: Text(RideHints.jump),
+      ),
+      ListTile(
+        leading: const Icon(Icons.keyboard_arrow_down),
+        title: const Text('俯身'),
+        subtitle: Text(RideHints.duck),
+      ),
+      ListTile(
+        leading: const Icon(Icons.pause_circle_outline),
+        title: const Text('暂停'),
+        subtitle: Text(RideHints.pause),
+      ),
+    ];
   }
 
   Widget _buildDirTile(

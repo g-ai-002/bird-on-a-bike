@@ -2,6 +2,7 @@ import 'package:bird_on_a_bike/models/difficulty.dart';
 import 'package:bird_on_a_bike/pages/home_page.dart';
 import 'package:bird_on_a_bike/providers/game_provider.dart';
 import 'package:bird_on_a_bike/providers/settings_provider.dart';
+import 'package:bird_on_a_bike/utils/ride_hints.dart';
 import 'package:bird_on_a_bike/widgets/pelican_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,6 +32,7 @@ void main() {
     expect(find.text('排行榜'), findsOneWidget);
     expect(find.byType(PelicanBadge), findsOneWidget);
     expect(find.text('最高分'), findsOneWidget);
+    expect(find.text(RideHints.home), findsOneWidget);
   });
 
   testWidgets('Provider 初始状态', (tester) async {
