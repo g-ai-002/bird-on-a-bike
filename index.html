@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>鹈鹕骑单车 · 历史版本</title>
+  <meta name="description" content="鹈鹕骑单车 的历史版本列表，每个发布 tag 对应一个可独立试玩的 Web 版本。">
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 48px 20px 64px;
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+      color: #eaf6f4;
+      background: radial-gradient(circle at 50% -20%, #1a4a52 0%, #0b2a2e 45%, #061416 100%);
+    }
+    .wrap { max-width: 880px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 32px; }
+    h1 { margin: 0 0 10px; font-size: clamp(24px, 4vw, 34px); letter-spacing: 1px; }
+    header p { margin: 0; color: #9fc4c0; font-size: 14px; line-height: 1.7; }
+    .list {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
+    .card {
+      display: block;
+      padding: 18px 20px;
+      border-radius: 14px;
+      text-decoration: none;
+      color: inherit;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(95, 211, 196, 0.22);
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      border-color: #5fd3c4;
+      background: rgba(95, 211, 196, 0.14);
+    }
+    .ver { display: block; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; }
+    .badge {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #04211f;
+      background: #5fd3c4;
+      vertical-align: 2px;
+    }
+    .badge-debug { background: #f0a24b; color: #2a1602; }
+    .go { display: block; margin-top: 6px; font-size: 12px; color: #9fc4c0; }
+    footer { margin-top: 36px; text-align: center; font-size: 12px; line-height: 1.8; color: #7ea5a1; }
+    footer a { color: #5fd3c4; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>鹈鹕骑单车</h1>
+      <p>每个发布 tag 对应一个独立的 Web 版本，历史版本长期保留，可随时回看。<br><code>debug</code> 为最新一次工作流构建的预览版，用于测试与验证，可能不稳定。<br>桌面端用键盘（空格 / ↑ 跳跃、↓ 俯身），移动端用点击与滑动。</p>
+    </header>
+    <div class="list">
+      <a class="card" href="./debug/"><span class="ver">debug<span class="badge badge-debug">预览</span></span><span class="go">最新一次构建 →</span></a>
+    </div>
+    <footer>
+      <p>仓库：<a href="https://github.com/g-ai-002/bird-on-a-bike">g-ai-002/bird-on-a-bike</a> · 更新于 2026-10-25 11:56 UTC</p>
+      <p>Android APK 与 Windows ZIP 请到该仓库的 Releases 页面下载。</p>
+    </footer>
+  </div>
+</body>
+</html>
