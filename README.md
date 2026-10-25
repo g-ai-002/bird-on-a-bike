@@ -1,7 +1,9 @@
 # 鹈鹕骑单车 🚴
 
-一只鹈鹕骑着单车沿海岸线疾驰的横版躲避小游戏，基于 Flutter + Flame 开发，
-支持 Android 与 Windows 双平台。
+一只鹈鹕骑着单车沿海岸线疾驰的固定视角 3D 躲避小游戏，基于 Flutter、Flame 与
+flutter_scene 开发，支持 Android 与 Windows 双平台。游戏规则与碰撞仍在 2D 像素
+空间计算，画面由固定机位的低多边形 3D 场景呈现；设备不支持 Flutter GPU 时自动
+回退到原有的 2D 渲染。
 
 ## 玩法
 
@@ -15,14 +17,15 @@
 
 ## 功能
 
-- 🚴 Flame 组件化渲染：天空、海面、远山、路面与骑行者分层绘制
-- 🌅 黄昏海岸视差背景：云、海浪、山影随速度滚动
+- 🧊 flutter_scene 固定机位 3D：渐变黄昏天空、海面、远山与低多边形鹈鹕 / 自行车
+- 🌅 黄昏海岸视差：云、海浪、山影随速度滚动
 - 🐟 小鱼、护盾、磁铁三类拾取物与连击计分
 - 🪧 地面障碍与悬空横幅两种躲避方式（跳跃 / 俯身）
 - 🎞️ 二段跳、可变跳跃高度、俯身加速下坠
 - 💥 撞击慢动作、镜头震动、红闪与结算遮罩
 - ⏱️ 开局 3-2-1-GO 倒计时与暂停遮罩
-- 🎨 手绘鹈鹕与自行车：蹬踏、扇翅、围巾、护盾与磁铁光效
+- 🎨 3D 鹈鹕与自行车：蹬踏、扇翅、围巾、护盾与磁铁光环
+- 🛟 Flutter GPU 不可用时自动回退 2D 渲染
 - 🏅 排行榜、最高分与最远距离持久化
 - 🌓 深色 / 浅色主题与三档难度
 - 🎵 程序化生成音效与循环背景音乐，无需外部音频资源
@@ -42,7 +45,7 @@
 
 ## 下载
 
-首个版本 `v0.1.0` 通过 CI 验证后，将通过 GitHub Actions 与 Gitea Actions 自动构建：
+最新版本 `v0.3.0` 将通过 GitHub Actions 与 Gitea Actions 自动构建：
 
 - Android APK（arm64-v8a）
 - Windows ZIP（x86-64）
@@ -59,9 +62,12 @@
 
 ### 运行
 
+flutter_scene 渲染依赖 Flutter GPU。Android 已在 `AndroidManifest.xml` 中开启；
+本地调试其他原生平台时在命令行加上开关：
+
 ```bash
 flutter pub get
-flutter run
+flutter run --enable-flutter-gpu
 ```
 
 Windows 平台文件不入库，首次本地构建前先执行：
@@ -69,6 +75,14 @@ Windows 平台文件不入库，首次本地构建前先执行：
 ```bash
 flutter create --platforms=windows --project-name bird_on_a_bike .
 ```
+
+生成后把 Flutter GPU 开关写进 runner（release 构建需要，CI 里同一步由流水线执行）：
+
+```bash
+sed -i 's|flutter::DartProject project(L"data");|flutter::DartProject project(L"data");\n  project.set_enable_flutter_gpu(true);|' windows/runner/main.cpp
+```
+
+若 GPU 初始化失败，游戏会记录日志并回退到 2D 渲染，玩法不受影响。
 
 ### 测试与静态检查
 
@@ -83,8 +97,8 @@ flutter test
 与 Windows ZIP，并在对应平台创建 Release：
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 应用内版本号位于 `lib/utils/constants.dart` 的 `AppConstants.version`，发版时需与
@@ -93,7 +107,9 @@ git push origin v0.1.0
 ## 技术栈
 
 - Flutter 3.47.7
-- Flame 1.38.2（组件化渲染、游戏主循环与输入）
+- Flame 1.38.2（游戏主循环、输入、遮罩与 2D 回退渲染）
+- flutter_scene 0.24.3（固定机位 3D 场景与 Flutter GPU 渲染）
+- vector_math（3D 变换）
 - Provider 状态管理
 - Material 3 设计
 - SharedPreferences 持久化
