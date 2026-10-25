@@ -45,7 +45,7 @@
 
 ## 下载
 
-最新版本 `v0.4.0` 将通过 GitHub Actions 与 Gitea Actions 自动构建：
+最新版本 `v0.5.0` 将通过 GitHub Actions 与 Gitea Actions 自动构建：
 
 - Android APK（arm64-v8a）
 - Windows ZIP（x86-64）
@@ -100,8 +100,8 @@ flutter test
 与 Windows ZIP，并在对应平台创建 Release：
 
 ```bash
-git tag v0.4.0
-git push origin v0.4.0
+git tag v0.5.0
+git push origin v0.5.0
 ```
 
 应用内版本号位于 `lib/utils/constants.dart` 的 `AppConstants.version`，发版时需与

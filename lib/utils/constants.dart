@@ -1,4 +1,4 @@
-/// 应用常量与 3D 世界玩法参数。
+/// 应用常量与 2.5D 世界玩法参数。
 ///
 /// 玩法长度统一用世界单位：10 单位 = 1 米，与画面逻辑像素 10:1 对应，
 /// 因此速度、重力等数值在视觉上手感与此前一致。
@@ -6,7 +6,7 @@ class AppConstants {
   AppConstants._();
 
   static const String appName = '鹈鹕骑单车';
-  static const String version = '0.4.0';
+  static const String version = '0.5.0';
 
   static const String prefKeyDarkMode = 'dark_mode';
   static const String prefKeyHighScore = 'high_score';

@@ -21,7 +21,7 @@
 - [x] 自适应布局（手机 / 折叠屏 / 平板 / 桌面）
 - [x] 深色 / 浅色主题与程序化音效
 - [x] 日志系统（按日落盘到用户目录 `logs/`）
-- [x] 固定机位 3D 低多边形场景（flutter_scene + Flutter GPU）
+- [x] 固定机位 2.5D 等距场景（Flame 精灵堆叠 + 3D 装饰器 + 视差滚动）
 - [x] 玩法坐标迁移到 3D 世界空间，移除 2D 回退渲染
 - [x] 双流水线构建与发布（GitHub Actions / Gitea Actions）
 - [ ] 更多场景主题：清晨薄雾、夜晚灯塔、雨天路滑
@@ -39,9 +39,27 @@
 
 ## 版本历史
 
-### v0.4.0 (MINOR) — 当前开发中
+### v0.5.0 (MINOR) — 当前开发中
 
-- **状态**: 本机无 Flutter CLI，`flutter analyze` / `flutter test` 未运行（待 CI）
+- **状态**: 已在本机执行 `flutter pub get` / `flutter analyze` / `flutter test`
+- **目标**: 去掉 flutter_scene 依赖，改用纯 Flame 技术栈做固定机位的 2.5D 海岸地图
+- **任务**:
+  - [x] 新增 `IsoProjection`：等距斜视投影、深度排序与米到像素的滚动换算
+  - [x] 新增 `StackedSprite`：把同一画法分层压暗、烘焙成带体积感的精灵
+  - [x] 远景拆成 `SkyBackdropComponent`：天空、落日、云、远山、灯塔与海面分层视差
+  - [x] 新增 `RoadComponent`：等距路面、虚线、横向接缝、沙带与椰树草丛
+  - [x] 新增 `ShoreForegroundComponent`：更快的近景剪影，压住画面下沿
+  - [x] 新增 `RideEntitiesComponent`：道具精灵堆叠、骑行者 `Rotate3DDecorator`
+  - [x] 按世界 z 排序绘制实体，骑行者插在 z = 0 的深度位置
+  - [x] 删除 `scene3d/`、`Scene3DComponent` 与 GPU 不支持提示页
+  - [x] 移除 flutter_scene / vector_math 依赖与 Android、Windows、CI 的 GPU 开关
+  - [x] 补充等距投影单元测试与 README 渲染结构说明
+  - [x] 版本号 0.4.0 → 0.5.0
+  - [x] 更新 README / plan / versions
+
+### v0.4.0 (MINOR)
+
+- **状态**: 已发布 ✅
 - **目标**: 把游戏整体整改为 3D：玩法坐标 3D 化、删除 2D 回退渲染、相机随速度与跳跃变化
 - **任务**:
   - [x] 新增 `WorldLayout`：世界单位、骑行线、生成位置与屏幕投影
