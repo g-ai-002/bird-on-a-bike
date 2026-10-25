@@ -18,6 +18,7 @@ import 'components/particle_burst_component.dart';
 import 'components/pickup_component.dart';
 import 'components/rider_component.dart';
 import 'components/score_popup_layer.dart';
+import 'components/scene3d_component.dart';
 import 'components/speed_lines_component.dart';
 import 'components/sky_component.dart';
 import 'input/ride_input_component.dart';
@@ -92,12 +93,7 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
 
   @override
   Future<void> onLoad() async {
-    _sky = SkyComponent(provider: provider, priority: 0);
-    _ground = GroundComponent(provider: provider, priority: 10);
     _speedLines = SpeedLinesComponent(provider: provider, priority: 12);
-    _obstacles = ObstacleComponent(provider: provider, priority: 20);
-    _pickups = PickupComponent(provider: provider, priority: 30);
-    _rider = RiderComponent(provider: provider, priority: 40);
     _particles = ParticleBurstComponent(provider: provider, priority: 50);
     _flash = DeathFlashComponent(provider: provider, priority: 60);
     _popups = ScorePopupLayer(color: RideColors.fish);
@@ -107,18 +103,36 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
       priority: 100,
     );
 
-    await world.addAll(<Component>[
-      _sky,
-      _ground,
+    final scene3d = Scene3DComponent(provider: provider, priority: 0);
+    final use3d = await scene3d.prepare();
+
+    final layers = <Component>[];
+    if (use3d) {
+      layers.add(scene3d);
+    } else {
+      _sky = SkyComponent(provider: provider, priority: 0);
+      _ground = GroundComponent(provider: provider, priority: 10);
+      _obstacles = ObstacleComponent(provider: provider, priority: 20);
+      _pickups = PickupComponent(provider: provider, priority: 30);
+      _rider = RiderComponent(provider: provider, priority: 40);
+      layers.addAll(<Component>[
+        _sky,
+        _ground,
+        _obstacles,
+        _pickups,
+        _rider,
+      ]);
+    }
+
+    layers.addAll(<Component>[
       _speedLines,
-      _obstacles,
-      _pickups,
-      _rider,
       _particles,
       _flash,
       _input,
       _popups,
     ]);
+
+    await world.addAll(layers);
 
     camera.viewfinder.position = _cameraBase;
     camera.viewfinder.zoom = 1;
