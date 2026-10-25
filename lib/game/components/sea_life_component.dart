@@ -7,8 +7,8 @@ import 'scene_layer_component.dart';
 
 /// 海面远景：远处时而有鱼跃出水面。
 ///
-/// 只随时间做轻微横向漂移，每帧仅绘制少量 Path，
-/// 叠在远景海面之上、路面之下。
+/// 跃出与入水的位置各溅起一次浪花，只随时间做轻微横向漂移，
+/// 每帧仅绘制少量 Path，叠在远景海面之上、路面之下。
 class SeaLifeComponent extends SceneLayerComponent {
   SeaLifeComponent({required super.provider, super.priority});
 
@@ -53,17 +53,20 @@ class SeaLifeComponent extends SceneLayerComponent {
       seed.x + math.sin(_elapsed * 0.18 + seed.phase * 6) * 9,
       _waterlineY,
     );
+    final span = 38.0 + seed.size * 1.6;
+    // 跃出点在水面左端，落入点在水面右端。
+    final takeOff = Offset(water.dx - span / 2, water.dy);
+    final landing = Offset(water.dx + span / 2, water.dy);
 
     if (cycle >= _jumpPortion) {
       final after = (cycle - _jumpPortion) / 0.09;
       if (after < 1) {
-        _paintSplash(canvas, water, 1 - after);
+        _paintSplash(canvas, landing, 1 - after);
       }
       return;
     }
 
     final t = cycle / _jumpPortion;
-    final span = 38.0 + seed.size * 1.6;
     final height = 18.0 + seed.size * 0.9;
     final center = Offset(
       water.dx + (t - 0.5) * span,
@@ -92,9 +95,12 @@ class SeaLifeComponent extends SceneLayerComponent {
     canvas.drawCircle(const Offset(4.8, -1), 0.9, _fishShadePaint);
     canvas.restore();
 
-    final nearSurface = math.min(t, 1 - t);
-    if (nearSurface < 0.3) {
-      _paintSplash(canvas, water, 1 - nearSurface / 0.3);
+    // 浪花只出现在跃出与入水的瞬间，位置分别对齐起跳点与入水点。
+    const splashPortion = 0.3;
+    if (t < splashPortion) {
+      _paintSplash(canvas, takeOff, 1 - t / splashPortion);
+    } else if (1 - t < splashPortion) {
+      _paintSplash(canvas, landing, 1 - (1 - t) / splashPortion);
     }
   }
 
