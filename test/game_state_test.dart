@@ -84,12 +84,19 @@ void main() {
 
   group('实体模型', () {
     test('障碍移动与离屏判定', () {
-      const obstacle = Obstacle(id: 1, kind: ObstacleKind.rock, x: 100);
-      final moved = obstacle.moveBy(-50);
-      expect(moved.x, 50);
-      expect(moved.right, 50 + ObstacleKind.rock.width);
+      const obstacle = Obstacle(
+        id: 1,
+        kind: ObstacleKind.rock,
+        x: 10,
+        z: 1.2,
+      );
+      final moved = obstacle.moveBy(-5);
+      expect(moved.x, 5);
+      expect(moved.z, 1.2);
+      expect(moved.centerX, 5 + ObstacleKind.rock.width / 2);
+      expect(moved.right, 5 + ObstacleKind.rock.width);
       expect(
-        const Obstacle(id: 2, kind: ObstacleKind.rock, x: -200).isOffscreen,
+        const Obstacle(id: 2, kind: ObstacleKind.rock, x: -20).isOffscreen,
         isTrue,
       );
     });
@@ -101,17 +108,30 @@ void main() {
       expect(ObstacleKind.rock.clearance, 0);
     });
 
-    test('拾取物移动保留类型与高度', () {
+    test('横幅下沿高于俯身、低于站立', () {
+      expect(
+        RiderMotion.duckHeight,
+        lessThan(ObstacleKind.banner.clearance),
+      );
+      expect(
+        RiderMotion.standingHeight,
+        greaterThan(ObstacleKind.banner.clearance),
+      );
+    });
+
+    test('拾取物移动保留类型、高度与深度', () {
       const pickup = Pickup(
         id: 3,
         kind: PickupKind.fish,
-        x: 200,
-        y: 60,
+        x: 20,
+        y: 6,
+        z: -1.2,
         phase: 1,
       );
-      final moved = pickup.moveBy(-10);
-      expect(moved.x, 190);
-      expect(moved.y, 60);
+      final moved = pickup.moveBy(-1);
+      expect(moved.x, 19);
+      expect(moved.y, 6);
+      expect(moved.z, -1.2);
       expect(moved.kind, PickupKind.fish);
     });
   });

@@ -1,4 +1,4 @@
-/// 骑行难度：影响初速度与障碍密度。
+/// 骑行难度：影响初速度与障碍密度（世界单位 / 秒）。
 enum Difficulty { easy, normal, hard }
 
 extension DifficultyInfo on Difficulty {
@@ -27,11 +27,11 @@ extension DifficultyInfo on Difficulty {
   double get baseSpeed {
     switch (this) {
       case Difficulty.easy:
-        return 230;
+        return 23;
       case Difficulty.normal:
-        return 275;
+        return 27.5;
       case Difficulty.hard:
-        return 320;
+        return 32;
     }
   }
 

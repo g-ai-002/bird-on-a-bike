@@ -12,22 +12,18 @@ import '../services/audio_service.dart';
 import '../utils/constants.dart';
 import 'bike_world.dart';
 import 'components/death_flash_component.dart';
-import 'components/ground_component.dart';
-import 'components/obstacle_component.dart';
 import 'components/particle_burst_component.dart';
-import 'components/pickup_component.dart';
-import 'components/rider_component.dart';
 import 'components/score_popup_layer.dart';
 import 'components/scene3d_component.dart';
 import 'components/speed_lines_component.dart';
-import 'components/sky_component.dart';
 import 'input/ride_input_component.dart';
 import 'ride_style.dart';
+import 'world_layout.dart';
 
-/// 基于 Flame 的横版骑行游戏。
+/// 基于 Flame 主循环的 3D 海岸骑行游戏。
 ///
-/// 规则、碰撞与计分都在 [GameProvider] 中；这里负责世界组装、
-/// 输入分发、相机反馈与遮罩调度。
+/// 规则、碰撞与计分都在 [GameProvider] 中；场景与角色由 flutter_scene 的
+/// 3D 场景呈现，这里只负责世界组装、输入分发、相机反馈与遮罩调度。
 class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
   BikeGame({required this.provider})
       : super(
@@ -41,18 +37,14 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
   static const String pauseOverlayId = 'pause';
   static const String countdownOverlayId = 'countdown';
   static const String gameOverOverlayId = 'gameOver';
+  static const String unsupported3DOverlayId = 'unsupported3d';
 
   final GameProvider provider;
 
   /// 开局倒计时：3、2、1、0（0 显示 GO）。
   final ValueNotifier<int> countdown = ValueNotifier<int>(0);
 
-  late final SkyComponent _sky;
-  late final GroundComponent _ground;
   late final SpeedLinesComponent _speedLines;
-  late final ObstacleComponent _obstacles;
-  late final PickupComponent _pickups;
-  late final RiderComponent _rider;
   late final ParticleBurstComponent _particles;
   late final DeathFlashComponent _flash;
   late final ScorePopupLayer _popups;
@@ -104,35 +96,22 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
     );
 
     final scene3d = Scene3DComponent(provider: provider, priority: 0);
-    final use3d = await scene3d.prepare();
+    final ready = await scene3d.prepare();
 
-    final layers = <Component>[];
-    if (use3d) {
-      layers.add(scene3d);
-    } else {
-      _sky = SkyComponent(provider: provider, priority: 0);
-      _ground = GroundComponent(provider: provider, priority: 10);
-      _obstacles = ObstacleComponent(provider: provider, priority: 20);
-      _pickups = PickupComponent(provider: provider, priority: 30);
-      _rider = RiderComponent(provider: provider, priority: 40);
-      layers.addAll(<Component>[
-        _sky,
-        _ground,
-        _obstacles,
-        _pickups,
-        _rider,
-      ]);
+    if (!ready) {
+      // 没有可用的 Flutter GPU：不再保留 2D 回退，直接提示设备不支持。
+      overlays.add(unsupported3DOverlayId, priority: 30);
+      return;
     }
 
-    layers.addAll(<Component>[
+    await world.addAll(<Component>[
+      scene3d,
       _speedLines,
       _particles,
       _flash,
       _input,
       _popups,
     ]);
-
-    await world.addAll(layers);
 
     camera.viewfinder.position = _cameraBase;
     camera.viewfinder.zoom = 1;
@@ -351,8 +330,8 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
 
   void _detectPickups(GameState previous, GameState next) {
     final head = Vector2(
-      AppConstants.riderX,
-      AppConstants.groundY - next.rider.height - 118,
+      WorldLayout.screenX(WorldLayout.riderX),
+      WorldLayout.screenY(next.rider.height + 11.8),
     );
 
     if (next.fish > previous.fish) {

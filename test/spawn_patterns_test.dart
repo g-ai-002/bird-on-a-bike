@@ -4,6 +4,7 @@ import 'package:bird_on_a_bike/game/spawn_patterns.dart';
 import 'package:bird_on_a_bike/models/difficulty.dart';
 import 'package:bird_on_a_bike/models/obstacle.dart';
 import 'package:bird_on_a_bike/models/pickup.dart';
+import 'package:bird_on_a_bike/utils/constants.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -49,22 +50,33 @@ void main() {
         );
       }
     });
+
+    test('深度摆位只在骑行线两侧一档内', () {
+      for (var seed = 0; seed < 40; seed++) {
+        final depth = pickDepth(Random(seed));
+        expect(depth.abs(), anyOf(0.0, AppConstants.depthSpread));
+        expect(depth, lessThanOrEqualTo(AppConstants.depthSpread));
+        expect(depth, greaterThanOrEqualTo(-AppConstants.depthSpread));
+      }
+    });
   });
 
   group('鱼群', () {
-    test('数量为 1~3 且 id 连续、横向间距 36', () {
+    test('数量为 1~3 且 id 连续、横向间距 3.6', () {
       for (var seed = 0; seed < 40; seed++) {
         final fish = fishPattern(
           startId: 10,
-          x: 700,
+          x: 70,
+          z: AppConstants.depthSpread,
           random: Random(seed),
         );
         expect(fish.length, inInclusiveRange(1, 3));
         for (var i = 0; i < fish.length; i++) {
           expect(fish[i].kind, PickupKind.fish);
           expect(fish[i].id, 10 + i);
-          expect(fish[i].x, 700 + i * 36);
-          expect(fish[i].y, inInclusiveRange(34, 170));
+          expect(fish[i].x, closeTo(70 + i * 3.6, 1e-9));
+          expect(fish[i].y, inInclusiveRange(3.4, 16.0));
+          expect(fish[i].z, AppConstants.depthSpread);
         }
       }
     });

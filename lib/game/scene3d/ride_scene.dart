@@ -4,19 +4,21 @@ import 'dart:ui' show Canvas, Color, PlatformDispatcher, Rect;
 import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
+import '../../models/difficulty.dart';
 import '../../models/game_state.dart';
 import '../../models/obstacle.dart';
 import '../../models/pickup.dart';
 import '../../providers/game_provider.dart';
+import '../../utils/constants.dart';
 import '../ride_style.dart';
-import 'scene_units.dart';
+import '../world_layout.dart';
 
-/// 固定侧视相机下的 3D 海岸骑行场景。
+/// 世界坐标驱动的 3D 海岸骑行场景。
 ///
-/// 玩法仍由 [GameProvider] 以 2D 像素推进，这里只把每帧快照换算成 3D
-/// 位置与姿态：低多边形鹈鹕、自行车、礁石/木箱/浮木/横幅与小鱼，
-/// 背景是渐变天空、海面、远山与夕阳。相机固定不动，撞车反馈仍由
-/// Flame 的取景器缩放与震动完成。
+/// 玩法快照里的坐标就是世界单位，场景不再做像素换算：低多边形鹈鹕、
+/// 自行车、礁石/木箱/浮木/横幅与小鱼都直接摆到对应位置，背景是渐变
+/// 天空、海面、远山与夕阳。相机会随速度轻微后拉并跟随跳跃高度，
+/// 撞车反馈仍由 Flame 的取景器缩放与震动完成。
 class RideScene {
   RideScene({required this.provider});
 
@@ -182,7 +184,7 @@ class RideScene {
     _elapsed += dt;
     final state = provider.state;
     if (state.isPlaying) {
-      _wheelAngle -= state.speed * dt / 24;
+      _wheelAngle -= state.speed * WorldLayout.unitsPerMeter * dt / 24;
       _wingPhase += dt * (state.rider.airborne ? 13.0 : 5.5);
     }
 
@@ -190,6 +192,7 @@ class RideScene {
     _syncObstacles();
     _syncPickups();
     _syncScenery();
+    _updateCamera(dt, state);
     scene.update(dt);
   }
 
@@ -202,6 +205,25 @@ class RideScene {
       viewport: viewport,
       pixelRatio: math.min(dpr, 1.5),
     );
+  }
+
+  /// 相机随速度后拉、随跳跃抬高视线，并保留一点海浪般的横向漂移。
+  void _updateCamera(double dt, GameState state) {
+    final baseSpeed = state.difficulty.baseSpeed;
+    final speedT =
+        ((state.speed - baseSpeed) / (AppConstants.maxSpeed - baseSpeed))
+            .clamp(0.0, 1.0)
+            .toDouble();
+    final follow = (1 - math.exp(-dt * 4.5)).clamp(0.0, 1.0).toDouble();
+
+    final desiredY = 16 + speedT * 1.6;
+    final desiredZ = -52 - speedT * 4;
+    final desiredTargetY = 14 + state.rider.height * 0.08;
+
+    camera.position.y += (desiredY - camera.position.y) * follow;
+    camera.position.z += (desiredZ - camera.position.z) * follow;
+    camera.position.x = math.sin(_elapsed * 0.55) * 0.3 * (0.4 + speedT);
+    camera.target.y += (desiredTargetY - camera.target.y) * follow;
   }
 
   // ---------------------------------------------------------------------------
@@ -394,13 +416,14 @@ class RideScene {
   // ---------------------------------------------------------------------------
 
   void _buildRider() {
-    _rider = Node()..position = vm.Vector3(SceneUnits.riderX, 0, 0);
+    _rider = Node()
+      ..position = vm.Vector3(WorldLayout.riderX, 0, WorldLayout.riderZ);
     scene.add(_rider);
 
     _riderShadow = _node(
       _disc,
       _shadowMat,
-      position: vm.Vector3(SceneUnits.riderX, 0.03, 0),
+      position: vm.Vector3(WorldLayout.riderX, 0.03, WorldLayout.riderZ),
       scale: vm.Vector3(2.4, 1, 0.9),
     );
     scene.add(_riderShadow);
@@ -870,9 +893,9 @@ class RideScene {
     final over = state.status == GameStatus.over;
 
     _rider.position = vm.Vector3(
-      SceneUnits.riderX,
-      SceneUnits.height(state.rider.height),
-      0,
+      WorldLayout.riderX,
+      state.rider.height,
+      WorldLayout.riderZ,
     );
     _rider.rotation = over
         ? vm.Quaternion.axisAngle(_zAxis, -0.16)
@@ -904,7 +927,7 @@ class RideScene {
       );
     }
 
-    final jump = SceneUnits.height(state.rider.height);
+    final jump = state.rider.height;
     final shadowScale = math.max(0.9, 2.4 - jump * 0.12);
     _riderShadow.scale = vm.Vector3(shadowScale, 1, shadowScale * 0.38);
 
@@ -952,7 +975,7 @@ class RideScene {
         _obstacleNodes[obstacle.id] = node;
         _obstacleKinds[obstacle.id] = obstacle.kind;
       }
-      node.position = vm.Vector3(SceneUnits.obstacleCenterX(obstacle), 0, 0);
+      node.position = vm.Vector3(obstacle.centerX, 0, obstacle.z);
     }
 
     for (final id in _obstacleNodes.keys.toList()) {
@@ -983,8 +1006,8 @@ class RideScene {
   }
 
   Node _buildObstacle(ObstacleKind kind) {
-    final width = SceneUnits.obstacleWidth(kind);
-    final height = SceneUnits.obstacleHeight(kind);
+    final width = kind.width;
+    final height = kind.height;
     final root = Node();
 
     switch (kind) {
@@ -1229,7 +1252,7 @@ class RideScene {
         );
         break;
       case ObstacleKind.banner:
-        final clearance = SceneUnits.bannerClearance(kind);
+        final clearance = kind.clearance;
         final poleTop = clearance + height + 1.6;
         root.add(
           _box(
@@ -1381,9 +1404,9 @@ class RideScene {
       }
       final bob = math.sin(_elapsed * 3 + pickup.phase) * 0.5;
       node.position = vm.Vector3(
-        SceneUnits.pickupX(pickup),
-        SceneUnits.pickupHeight(pickup) + bob,
-        0,
+        pickup.x,
+        pickup.y + bob,
+        pickup.z,
       );
       node.rotation = pickup.kind == PickupKind.fish
           ? vm.Quaternion.axisAngle(
@@ -1534,10 +1557,11 @@ class RideScene {
   }
 
   void _syncScenery() {
-    final distancePx = provider.state.distance * 10;
+    // 距离以米记录，1 米 = 10 世界单位，滚动量正好等于 distance。
+    final scroll = provider.state.distance;
 
     const dashSpan = 9.2;
-    final dashOffset = distancePx / SceneUnits.pixelsPerUnit;
+    final dashOffset = scroll;
     for (var i = 0; i < _dashes.length; i++) {
       final raw = -48 + (i * dashSpan - dashOffset) % 96;
       final x = raw < -48 ? raw + 96 : raw;
@@ -1546,13 +1570,13 @@ class RideScene {
 
     for (var i = 0; i < _waves.length; i++) {
       final seed = _waveSeeds[i];
-      final travel = distancePx * seed.speed / SceneUnits.pixelsPerUnit;
+      final travel = scroll * seed.speed;
       final raw = -40 + (seed.x + 40 - travel) % 80;
       final x = raw < -40 ? raw + 80 : raw;
       _waves[i].position = vm.Vector3(x, -2.3, seed.z);
     }
 
-    final cloudTravel = distancePx * 0.06 / SceneUnits.pixelsPerUnit;
+    final cloudTravel = scroll * 0.06;
     for (var i = 0; i < _clouds.length; i++) {
       final seed = _cloudSeeds[i];
       final raw = -60 + (seed.x + 60 - cloudTravel) % 120;

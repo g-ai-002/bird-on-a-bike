@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../game/collision.dart';
 import '../game/spawn_patterns.dart';
+import '../game/world_layout.dart';
 import '../models/difficulty.dart';
 import '../models/game_state.dart';
 import '../models/obstacle.dart';
@@ -177,7 +178,7 @@ class GameProvider extends ChangeNotifier {
     final speed =
         min(AppConstants.maxSpeed, s.speed + AppConstants.speedRampPerMeter * dt);
     final moved = speed * dt;
-    final distance = s.distance + moved / 10;
+    final distance = s.distance + moved / WorldLayout.unitsPerMeter;
 
     var obstacles = <Obstacle>[
       for (final obstacle in s.obstacles) obstacle.moveBy(-moved),
@@ -193,7 +194,8 @@ class GameProvider extends ChangeNotifier {
         Obstacle(
           id: _nextId++,
           kind: kind,
-          x: AppConstants.worldWidth + 70,
+          x: WorldLayout.obstacleSpawnX,
+          z: pickDepth(_random),
         ),
       );
       _nextObstacleIn = obstacleGapForKind(
@@ -207,7 +209,8 @@ class GameProvider extends ChangeNotifier {
         pickups.length < AppConstants.maxPickups - 3) {
       final pattern = fishPattern(
         startId: _nextId,
-        x: AppConstants.worldWidth + 100,
+        x: WorldLayout.fishSpawnX,
+        z: pickDepth(_random),
         random: _random,
       );
       _nextId += pattern.length;
@@ -222,8 +225,9 @@ class GameProvider extends ChangeNotifier {
         Pickup(
           id: _nextId++,
           kind: kind,
-          x: AppConstants.worldWidth + 120,
-          y: 70 + _random.nextDouble() * 50,
+          x: WorldLayout.powerUpSpawnX,
+          y: 7 + _random.nextDouble() * 5,
+          z: pickDepth(_random),
           phase: _random.nextDouble() * pi * 2,
         ),
       );
@@ -350,16 +354,18 @@ class GameProvider extends ChangeNotifier {
   }
 
   Pickup _attract(Pickup pickup, RiderMotion rider, double dt) {
-    final dx = AppConstants.riderX - pickup.x;
+    final dx = WorldLayout.riderX - pickup.x;
     final targetHeight = rider.height + rider.bodyHeight / 2;
     final dy = targetHeight - pickup.y;
-    final distance = sqrt(dx * dx + dy * dy);
-    if (distance > AppConstants.magnetRange || distance < 1) return pickup;
+    final dz = WorldLayout.riderZ - pickup.z;
+    final distance = sqrt(dx * dx + dy * dy + dz * dz);
+    if (distance > AppConstants.magnetRange || distance < 0.1) return pickup;
 
     final step = min(AppConstants.magnetSpeed * dt, distance);
     return pickup.moveBy(
       dx / distance * step,
       dy: pickup.y + dy / distance * step,
+      dz: pickup.z + dz / distance * step,
     );
   }
 

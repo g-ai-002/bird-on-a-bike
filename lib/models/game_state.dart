@@ -13,7 +13,7 @@ class GameState {
   final GameStatus status;
   final Difficulty difficulty;
 
-  /// 已骑行距离（米），1 米 = 10 世界像素。
+  /// 已骑行距离（米），1 米 = 10 世界单位。
   final double distance;
 
   /// 小鱼与连击带来的额外分数；总分 = 距离 + bonusScore。
@@ -43,7 +43,7 @@ class GameState {
     this.fish = 0,
     this.highScore = 0,
     this.bestDistance = 0,
-    this.speed = 275,
+    this.speed = 27.5,
     this.rider = RiderMotion.grounded,
     this.shieldCharges = 0,
     this.magnetRemaining = 0,

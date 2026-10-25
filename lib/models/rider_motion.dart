@@ -1,17 +1,17 @@
-/// 鹈鹕的纵向运动状态：与渲染无关的纯物理模型。
+/// 鹈鹕的纵向运动状态：与渲染无关的纯物理模型（世界单位）。
 ///
-/// [height] 是车轮底部离地高度，[velocity] 向上为正。
+/// [height] 是车轮底部离地高度，[velocity] 向上为正；10 单位 = 1 米。
 class RiderMotion {
-  static const double gravity = 2100;
-  static const double jumpVelocity = 660;
-  static const double doubleJumpVelocity = 580;
+  static const double gravity = 210;
+  static const double jumpVelocity = 66;
+  static const double doubleJumpVelocity = 58;
   static const double jumpCutFactor = 0.45;
   static const double duckGravityScale = 2.3;
   static const int maxJumps = 2;
 
   /// 站立/俯身时的碰撞盒高度（略小于美术高度，判定更宽容）。
-  static const double standingHeight = 96;
-  static const double duckHeight = 60;
+  static const double standingHeight = 9.6;
+  static const double duckHeight = 6.0;
 
   final double height;
   final double velocity;
@@ -27,7 +27,7 @@ class RiderMotion {
 
   static const RiderMotion grounded = RiderMotion();
 
-  bool get airborne => height > 0.001 || velocity > 0;
+  bool get airborne => height > 0.0001 || velocity > 0;
 
   bool get canJump => jumps < maxJumps;
 

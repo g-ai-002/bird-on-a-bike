@@ -3,6 +3,7 @@ import 'dart:math';
 import '../models/difficulty.dart';
 import '../models/obstacle.dart';
 import '../models/pickup.dart';
+import '../utils/constants.dart';
 
 /// 相邻障碍的时间间隔（秒），难度越高越密集。
 double obstacleGapSeconds(Random random, Difficulty difficulty) {
@@ -37,28 +38,41 @@ PickupKind pickPowerUpKind(Random random) {
   return random.nextBool() ? PickupKind.shield : PickupKind.magnet;
 }
 
+/// 实体在路面深度上的摆位：骑行线以及其两侧各一档。
+double pickDepth(Random random) {
+  const offsets = <double>[
+    -AppConstants.depthSpread,
+    0,
+    AppConstants.depthSpread,
+  ];
+  return offsets[random.nextInt(offsets.length)];
+}
+
 /// 生成 1~3 条鱼，可能排成一条水平线或一道小弧线。
 ///
-/// 高度范围从贴近地面到二段跳可及的位置，鼓励玩家主动起跳。
+/// 高度范围从贴近地面到二段跳可及的位置，鼓励玩家主动起跳；
+/// 同一串鱼共用一个路面深度。
 List<Pickup> fishPattern({
   required int startId,
   required double x,
+  double z = 0,
   required Random random,
 }) {
   final count = 1 + random.nextInt(3);
-  final baseY = 34 + random.nextDouble() * 110;
+  final baseY = 3.4 + random.nextDouble() * 10;
   final arc = count > 1 && random.nextBool();
-  const spacing = 36.0;
+  const spacing = 3.6;
   final pickups = <Pickup>[];
   for (var i = 0; i < count; i++) {
     final t = count == 1 ? 0.0 : i / (count - 1);
-    final arcOffset = arc ? sin(pi * t) * 26 : 0.0;
+    final arcOffset = arc ? sin(pi * t) * 2.6 : 0.0;
     pickups.add(
       Pickup(
         id: startId + i,
         kind: PickupKind.fish,
         x: x + spacing * i,
         y: baseY + arcOffset,
+        z: z,
         phase: random.nextDouble() * pi * 2,
       ),
     );

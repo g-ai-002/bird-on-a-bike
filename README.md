@@ -1,9 +1,9 @@
 # 鹈鹕骑单车 🚴
 
-一只鹈鹕骑着单车沿海岸线疾驰的固定视角 3D 躲避小游戏，基于 Flutter、Flame 与
-flutter_scene 开发，支持 Android 与 Windows 双平台。游戏规则与碰撞仍在 2D 像素
-空间计算，画面由固定机位的低多边形 3D 场景呈现；设备不支持 Flutter GPU 时自动
-回退到原有的 2D 渲染。
+一只鹈鹕骑着单车沿海岸线疾驰的 3D 躲避小游戏，基于 Flutter、Flame 与
+flutter_scene 开发，支持 Android 与 Windows 双平台。玩法坐标、碰撞与计分都在
+3D 世界空间（10 单位 = 1 米）中计算，画面是低多边形 3D 场景配合动态相机；
+设备不支持 Flutter GPU 时会给出明确提示。
 
 ## 玩法
 
@@ -17,7 +17,7 @@ flutter_scene 开发，支持 Android 与 Windows 双平台。游戏规则与碰
 
 ## 功能
 
-- 🧊 flutter_scene 固定机位 3D：渐变黄昏天空、海面、远山与低多边形鹈鹕 / 自行车
+- 🧊 flutter_scene 全量 3D：渐变黄昏天空、海面、远山与低多边形鹈鹕 / 自行车
 - 🌅 黄昏海岸视差：云、海浪、山影随速度滚动
 - 🐟 小鱼、护盾、磁铁三类拾取物与连击计分
 - 🪧 地面障碍与悬空横幅两种躲避方式（跳跃 / 俯身）
@@ -25,7 +25,8 @@ flutter_scene 开发，支持 Android 与 Windows 双平台。游戏规则与碰
 - 💥 撞击慢动作、镜头震动、红闪与结算遮罩
 - ⏱️ 开局 3-2-1-GO 倒计时与暂停遮罩
 - 🎨 3D 鹈鹕与自行车：蹬踏、扇翅、围巾、护盾与磁铁光环
-- 🛟 Flutter GPU 不可用时自动回退 2D 渲染
+- 🎥 动态 3D 相机：随车速后拉、跟随跳跃抬高视线
+- 🛟 Flutter GPU 不可用时给出提示，不再降级到 2D 渲染
 - 🏅 排行榜、最高分与最远距离持久化
 - 🌓 深色 / 浅色主题与三档难度
 - 🎵 程序化生成音效与循环背景音乐，无需外部音频资源
@@ -82,7 +83,8 @@ flutter create --platforms=windows --project-name bird_on_a_bike .
 sed -i 's|flutter::DartProject project(L"data");|flutter::DartProject project(L"data");\n  project.set_enable_flutter_gpu(true);|' windows/runner/main.cpp
 ```
 
-若 GPU 初始化失败，游戏会记录日志并回退到 2D 渲染，玩法不受影响。
+若 GPU 初始化失败，游戏会记录日志并显示「无法启动 3D 场景」的提示页，
+不会启动玩法。
 
 ### 测试与静态检查
 
@@ -107,8 +109,8 @@ git push origin v0.3.0
 ## 技术栈
 
 - Flutter 3.47.7
-- Flame 1.38.2（游戏主循环、输入、遮罩与 2D 回退渲染）
-- flutter_scene 0.24.3（固定机位 3D 场景与 Flutter GPU 渲染）
+- Flame 1.38.2（游戏主循环、输入、遮罩与屏幕空间特效）
+- flutter_scene 0.24.3（全量 3D 场景与 Flutter GPU 渲染）
 - vector_math（3D 变换）
 - Provider 状态管理
 - Material 3 设计
