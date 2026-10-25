@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -36,8 +38,10 @@ Future<void> main() async {
   AudioService().setMuted(storage.muted);
   runApp(BirdOnABikeApp(storage: storage));
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    AudioService().prewarm();
-    AudioService().startBgm();
+    // 音效与 BGM 在后台 isolate 合成，主线程不等它，也不阻塞首帧。
+    unawaited(
+      AudioService().prewarm().then((_) => AudioService().startBgm()),
+    );
   });
 }
 
