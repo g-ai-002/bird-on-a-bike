@@ -8,13 +8,16 @@ import 'scene_layer_component.dart';
 
 /// 黄昏海岸远景：渐变天空、落日、云、远山与海面。
 ///
-/// 每层按不同系数随骑行距离平移，形成视差滚动；海浪与云还叠加了
-/// 与距离无关的缓慢漂移，让暂停时画面也不至于完全静止。
+/// 每层按不同系数随骑行距离平移，形成视差滚动。天空、落日、灯塔与海面
+/// 是静态画面，首次渲染时烘焙成 [Picture] 复用；海浪只更新位置与预置的
+/// Paint，避免每帧重建渐变色。
 class SkyBackdropComponent extends SceneLayerComponent {
   SkyBackdropComponent({required super.provider, super.priority});
 
   static const Color _cloud = Color(0xFFFFF4E2);
-  static const Color _cloudShade = Color(0xFFF3CDA6);
+  static const Color _cloudShadeColor = Color(0xFFF3CDA6);
+  static const Color _sunCore = Color(0xFFFFFFFF);
+  static const Color _sunEdge = Color(0xFFFFB15C);
 
   static const List<_CloudSeed> _clouds = <_CloudSeed>[
     _CloudSeed(70, 92, 1.05),
@@ -24,6 +27,35 @@ class SkyBackdropComponent extends SceneLayerComponent {
     _CloudSeed(860, 96, 1.1),
     _CloudSeed(1010, 62, 0.66),
   ];
+
+  final Paint _cloudBody = Paint()..color = _cloud.withValues(alpha: 0.8);
+  final Paint _cloudShade = Paint()
+    ..color = _cloudShadeColor.withValues(alpha: 0.35);
+  final Paint _ridgeFar = Paint()
+    ..color = RideColors.hillFar.withValues(alpha: 0.55);
+  final Paint _ridgeNear = Paint()
+    ..color = RideColors.hillNear.withValues(alpha: 0.72);
+  final Paint _reflectionPaint = Paint()
+    ..color = RideColors.sun.withValues(alpha: 0.5)
+    ..strokeWidth = 2.4
+    ..strokeCap = StrokeCap.round;
+  final Paint _reflectionCore = Paint()
+    ..color = const Color(0xFFFFFDF2).withValues(alpha: 0.55)
+    ..strokeWidth = 3.4
+    ..strokeCap = StrokeCap.round;
+
+  late final List<Paint> _wavePaints = List<Paint>.generate(8, (row) {
+    final t = (row + 1) / 9;
+    return Paint()
+      ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.12 + t * 0.14)
+      ..strokeWidth = 1.2 + t * 1.2
+      ..strokeCap = StrokeCap.round;
+  });
+
+  Picture? _skyPicture;
+  Picture? _sunPicture;
+  Picture? _seaPicture;
+  Picture? _lighthousePicture;
 
   double _elapsed = 0;
 
@@ -37,43 +69,76 @@ class SkyBackdropComponent extends SceneLayerComponent {
 
   @override
   void render(Canvas canvas) {
+    _ensureStatic();
     final state = provider.state;
     final travel = IsoProjection.travelPixels(state.distance);
 
-    _paintSky(canvas);
-    _paintSun(canvas);
+    canvas.drawPicture(_skyPicture!);
+    canvas.drawPicture(_sunPicture!);
     _paintClouds(canvas, travel);
     _paintRidges(canvas, travel);
-    _paintLighthouse(canvas);
-    _paintSea(canvas);
+    canvas.drawPicture(_lighthousePicture!);
+    canvas.drawPicture(_seaPicture!);
     _paintWaveGlints(canvas, travel);
   }
 
+  void _ensureStatic() {
+    if (_skyPicture != null) return;
+    _skyPicture = _record(_paintSky);
+    _sunPicture = _record(_paintSun);
+    _seaPicture = _record(_paintSea);
+    _lighthousePicture = _record(_paintLighthouse);
+  }
+
+  Picture _record(void Function(Canvas canvas) painter) {
+    final recorder = PictureRecorder();
+    final canvas = Canvas(recorder);
+    painter(canvas);
+    return recorder.endRecording();
+  }
+
   void _paintSky(Canvas canvas) {
-    final rect = Rect.fromLTWH(0, 0, width, IsoProjection.horizonY + 8);
     canvas.drawRect(
-      rect,
+      Rect.fromLTWH(0, 0, width, IsoProjection.horizonY + 10),
       Paint()
         ..shader = Gradient.linear(
           Offset.zero,
-          const Offset(0, IsoProjection.horizonY + 8),
+          const Offset(0, IsoProjection.horizonY + 10),
           <Color>[
             RideColors.skyTop,
             RideColors.skyMid,
             RideColors.skyLow,
+            const Color(0xFFFFE9C4),
           ],
-          <double>[0, 0.58, 1],
+          <double>[0, 0.52, 0.82, 1],
+        ),
+    );
+    // 落日附近整体烘一层暖光，让夕阳的亮度压过天空。
+    final sunCenter = Offset(width * 0.78, IsoProjection.horizonY - 14);
+    canvas.drawCircle(
+      sunCenter,
+      380,
+      Paint()
+        ..shader = Gradient.radial(
+          sunCenter,
+          380,
+          <Color>[
+            RideColors.sun.withValues(alpha: 0.34),
+            RideColors.skyMid.withValues(alpha: 0.16),
+            RideColors.skyMid.withValues(alpha: 0),
+          ],
+          <double>[0, 0.35, 1],
         ),
     );
     canvas.drawRect(
-      Rect.fromLTWH(0, IsoProjection.horizonY - 26, width, 26),
+      Rect.fromLTWH(0, IsoProjection.horizonY - 30, width, 30),
       Paint()
         ..shader = Gradient.linear(
-          const Offset(0, IsoProjection.horizonY - 26),
+          const Offset(0, IsoProjection.horizonY - 30),
           const Offset(0, IsoProjection.horizonY),
           <Color>[
-            RideColors.skyMid.withValues(alpha: 0),
-            RideColors.skyMid.withValues(alpha: 0.55),
+            RideColors.skyLow.withValues(alpha: 0),
+            RideColors.sun.withValues(alpha: 0.42),
           ],
         ),
     );
@@ -81,25 +146,81 @@ class SkyBackdropComponent extends SceneLayerComponent {
 
   void _paintSun(Canvas canvas) {
     final center = Offset(width * 0.78, IsoProjection.horizonY - 14);
+
     canvas.drawCircle(
       center,
-      132,
+      250,
       Paint()
-        ..shader = Gradient.radial(center, 132, <Color>[
-          RideColors.sun.withValues(alpha: 0.5),
-          RideColors.sun.withValues(alpha: 0.16),
-          RideColors.sun.withValues(alpha: 0),
-        ], <double>[0, 0.42, 1]),
+        ..shader = Gradient.radial(
+          center,
+          250,
+          <Color>[
+            RideColors.sun.withValues(alpha: 0.62),
+            RideColors.sun.withValues(alpha: 0.24),
+            RideColors.sun.withValues(alpha: 0),
+          ],
+          <double>[0, 0.38, 1],
+        ),
     );
+
+    // 放射状阳光，烘焙一次，避免每帧算渐变。
+    // 画布在下面会平移到太阳中心，因此渐变用局部坐标定义。
+    final rayPaint = Paint()
+      ..shader = Gradient.linear(
+        Offset.zero,
+        const Offset(0, -330),
+        <Color>[
+          RideColors.sun.withValues(alpha: 0.2),
+          RideColors.sun.withValues(alpha: 0),
+        ],
+      );
+    for (var i = 0; i < 12; i++) {
+      canvas.save();
+      canvas.translate(center.dx, center.dy);
+      canvas.rotate(i * math.pi / 6 + 0.12);
+      canvas.drawPath(
+        Path()
+          ..moveTo(-7, 0)
+          ..lineTo(-30, -330)
+          ..lineTo(30, -330)
+          ..lineTo(7, 0)
+          ..close(),
+        rayPaint,
+      );
+      canvas.restore();
+    }
+
     canvas.drawCircle(
       center,
-      43,
+      104,
       Paint()
-        ..shader = Gradient.radial(center, 43, <Color>[
-          const Color(0xFFFFFDF2),
-          RideColors.sun,
-          RideColors.skyMid.withValues(alpha: 0.9),
-        ], <double>[0, 0.62, 1]),
+        ..shader = Gradient.radial(
+          center,
+          104,
+          <Color>[
+            RideColors.sun.withValues(alpha: 0.6),
+            RideColors.sun.withValues(alpha: 0.12),
+            RideColors.sun.withValues(alpha: 0),
+          ],
+          <double>[0, 0.4, 1],
+        ),
+    );
+
+    canvas.drawCircle(
+      center,
+      50,
+      Paint()
+        ..shader = Gradient.radial(
+          center,
+          50,
+          <Color>[
+            _sunCore,
+            const Color(0xFFFFF6C8),
+            RideColors.sun,
+            _sunEdge,
+          ],
+          <double>[0, 0.32, 0.72, 1],
+        ),
     );
   }
 
@@ -117,8 +238,6 @@ class SkyBackdropComponent extends SceneLayerComponent {
   }
 
   void _paintCloud(Canvas canvas, Offset center, double scale) {
-    final body = Paint()..color = _cloud.withValues(alpha: 0.78);
-    final shade = Paint()..color = _cloudShade.withValues(alpha: 0.32);
     const puffs = <(double, double, double)>[
       (-40, 2, 15),
       (-18, -8, 21),
@@ -130,7 +249,7 @@ class SkyBackdropComponent extends SceneLayerComponent {
       canvas.drawCircle(
         center + Offset(puff.$1 * scale, puff.$2 * scale),
         puff.$3 * scale,
-        body,
+        _cloudBody,
       );
     }
     canvas.drawOval(
@@ -139,7 +258,7 @@ class SkyBackdropComponent extends SceneLayerComponent {
         width: 96 * scale,
         height: 16 * scale,
       ),
-      shade,
+      _cloudShade,
     );
   }
 
@@ -152,7 +271,7 @@ class SkyBackdropComponent extends SceneLayerComponent {
       period: 300,
       peak: 54,
       phase: 1.2,
-      color: RideColors.hillFar.withValues(alpha: 0.55),
+      paint: _ridgeFar,
     );
     _paintRidge(
       canvas,
@@ -162,7 +281,7 @@ class SkyBackdropComponent extends SceneLayerComponent {
       period: 214,
       peak: 36,
       phase: 3.4,
-      color: RideColors.hillNear.withValues(alpha: 0.72),
+      paint: _ridgeNear,
     );
   }
 
@@ -174,7 +293,7 @@ class SkyBackdropComponent extends SceneLayerComponent {
     required double period,
     required double peak,
     required double phase,
-    required Color color,
+    required Paint paint,
   }) {
     final offset = (travel * speed) % period;
     final path = Path()..moveTo(-period, baseY);
@@ -192,7 +311,7 @@ class SkyBackdropComponent extends SceneLayerComponent {
       ..lineTo(width + period, height)
       ..lineTo(-period, height)
       ..close();
-    canvas.drawPath(path, Paint()..color = color);
+    canvas.drawPath(path, paint);
   }
 
   void _paintLighthouse(Canvas canvas) {
@@ -258,39 +377,54 @@ class SkyBackdropComponent extends SceneLayerComponent {
         Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.06),
       );
     }
+    // 太阳落在海面的一条亮带
+    canvas.drawRect(
+      Rect.fromLTWH(0, top, width, 10),
+      Paint()
+        ..shader = Gradient.linear(
+          const Offset(0, top),
+          const Offset(0, top + 10),
+          <Color>[
+            RideColors.sun.withValues(alpha: 0.35),
+            RideColors.sun.withValues(alpha: 0),
+          ],
+        ),
+    );
   }
 
   void _paintWaveGlints(Canvas canvas, double travel) {
     const top = IsoProjection.horizonY + 6;
     final bottom = IsoProjection.seaEdgeY - 6;
     const rows = 8;
-    for (var row = 0; row < rows; row++) {
+    for (var row = 0; row < rows; ++row) {
       final t = (row + 1) / (rows + 1);
       final y = top + (bottom - top) * t;
-      final span = 9.0 + t * 22;
-      final gap = 88.0 + t * 74;
+      final span = 9.0 + t * 24;
+      final gap = 84.0 + t * 72;
       final offset =
           (travel * (0.16 + t * 0.34) + _elapsed * (4 + t * 9)) % gap;
-      final paint = Paint()
-        ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.1 + t * 0.12)
-        ..strokeWidth = 1.2 + t * 1.1
-        ..strokeCap = StrokeCap.round;
+      final paint = _wavePaints[row];
       for (var i = -1; i * gap - offset < width + gap; i++) {
         final x = i * gap - offset;
         canvas.drawLine(Offset(x, y), Offset(x + span, y), paint);
       }
     }
 
-    final reflection = Paint()
-      ..color = RideColors.sun.withValues(alpha: 0.3)
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
     final centerX = width * 0.78;
-    for (var i = 0; i < 7; i++) {
-      final y = top + 6 + i * 12;
-      final w = 12.0 + i * 7 + math.sin(_elapsed * 1.4 + i) * 3;
-      canvas.drawLine(Offset(centerX - w / 2, y), Offset(centerX + w / 2, y), reflection);
+    for (var i = 0; i < 9; i++) {
+      final y = top + 4 + i * 11;
+      final w = 16.0 + i * 9 + math.sin(_elapsed * 1.4 + i) * 4;
+      canvas.drawLine(
+        Offset(centerX - w / 2, y),
+        Offset(centerX + w / 2, y),
+        _reflectionPaint,
+      );
     }
+    canvas.drawLine(
+      Offset(centerX - 30, bottom - 6),
+      Offset(centerX + 30, bottom - 6),
+      _reflectionCore,
+    );
   }
 }
 

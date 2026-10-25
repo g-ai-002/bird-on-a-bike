@@ -62,31 +62,32 @@ void _paintSpeedMarks(Canvas canvas, RideLook look) {
 }
 
 void _paintWheel(Canvas canvas, Offset center, double angle) {
-  final tyre = Paint()
-    ..color = RideColors.tyre
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 5.5;
+  // 胎体用固定内外半径的实心圆环，避免描边在整体缩放后出现粗细不匀。
+  final tyre = Path()
+    ..fillType = PathFillType.evenOdd
+    ..addOval(Rect.fromCircle(center: center, radius: 26))
+    ..addOval(Rect.fromCircle(center: center, radius: 20));
+  canvas.drawPath(tyre, Paint()..color = RideColors.tyre);
+
   final rim = Paint()
     ..color = RideColors.pelican
     ..style = PaintingStyle.stroke
-    ..strokeWidth = 2.4;
+    ..strokeWidth = 2.2;
+  canvas.drawCircle(center, 19.4, rim);
+
   final spoke = Paint()
     ..color = RideColors.pelican.withValues(alpha: 0.8)
     ..strokeWidth = 1.2
     ..strokeCap = StrokeCap.round;
-  final hub = Paint()..color = RideColors.frame;
-
-  canvas.drawCircle(center, 26, tyre);
-  canvas.drawCircle(center, 20, rim);
   for (var i = 0; i < 5; i++) {
     final a = angle + i * math.pi * 2 / 5;
     canvas.drawLine(
       center,
-      center + Offset(math.cos(a), math.sin(a)) * 19,
+      center + Offset(math.cos(a), math.sin(a)) * 18.4,
       spoke,
     );
   }
-  canvas.drawCircle(center, 4.5, hub);
+  canvas.drawCircle(center, 4.5, Paint()..color = RideColors.frame);
 }
 
 void _paintBike(Canvas canvas, RideLook look) {
@@ -224,8 +225,8 @@ void _paintPelican(Canvas canvas, RideLook look) {
   final bodyRadius = ducking ? const Size(29, 15) : const Size(27, 21);
   final headCenter = ducking ? const Offset(124, 74) : const Offset(111, 31);
   final headRadius = ducking ? 10.0 : 12.0;
-  final beakBase = ducking ? const Offset(132, 70) : const Offset(119, 28);
-  final beakTip = ducking ? const Offset(158, 77) : const Offset(147, 35);
+  final beakBase = ducking ? const Offset(129, 67) : const Offset(117, 26);
+  final beakTip = ducking ? const Offset(166, 81) : const Offset(158, 37);
   final hip = ducking ? const Offset(92, 84) : const Offset(86, 68);
 
   _paintLegs(canvas, hip, look);
@@ -376,39 +377,61 @@ void _paintBeak(
 ) {
   final upper = Paint()..color = RideColors.beak;
   final pouch = Paint()..color = RideColors.pouch;
+  final span = tip.dx - base.dx;
+  final depth = ducking ? 24.0 : 21.0;
 
   final upperPath = Path()
-    ..moveTo(base.dx, base.dy - 3)
+    ..moveTo(base.dx, base.dy - 4)
     ..quadraticBezierTo(
-      base.dx + (tip.dx - base.dx) * 0.55,
-      tip.dy - (ducking ? 3 : 2),
+      base.dx + span * 0.45,
+      tip.dy - (ducking ? 7 : 6),
       tip.dx,
       tip.dy,
     )
-    ..lineTo(base.dx + 1, base.dy + 4)
+    ..lineTo(tip.dx - 2, tip.dy + 3)
+    ..quadraticBezierTo(
+      base.dx + span * 0.5,
+      base.dy + 4,
+      base.dx + 1,
+      base.dy + 5,
+    )
     ..close();
   canvas.drawPath(upperPath, upper);
 
+  // 夸张的下颌喉囊：从嘴角一路垂到接近车轮的高度。
   final pouchPath = Path()
-    ..moveTo(base.dx + 1, base.dy + 2)
+    ..moveTo(base.dx + 2, base.dy + 3)
     ..quadraticBezierTo(
-      base.dx + (tip.dx - base.dx) * 0.5,
-      base.dy + (ducking ? 13 : 11),
-      tip.dx - 3,
-      tip.dy + 1,
+      base.dx + span * 0.45,
+      base.dy + depth,
+      tip.dx - 4,
+      tip.dy + 3,
     )
-    ..lineTo(base.dx + 2, base.dy + 4)
+    ..lineTo(tip.dx - 2, tip.dy + 1)
+    ..lineTo(base.dx + 3, base.dy + 5)
     ..close();
   canvas.drawPath(pouchPath, pouch);
 
   final line = Paint()
-    ..color = RideColors.beak.withValues(alpha: 0.75)
+    ..color = const Color(0xFFD97A1E)
     ..style = PaintingStyle.stroke
-    ..strokeWidth = 1.2;
-  canvas.drawLine(
-    base + const Offset(1, -2),
-    Offset(tip.dx - 1, tip.dy - 1),
+    ..strokeWidth = 1.6
+    ..strokeCap = StrokeCap.round;
+  canvas.drawPath(
+    Path()
+      ..moveTo(base.dx + 2, base.dy + 1)
+      ..quadraticBezierTo(
+        base.dx + span * 0.55,
+        tip.dy + (ducking ? 2 : 1),
+        tip.dx - 1,
+        tip.dy + 1,
+      ),
     line,
+  );
+  canvas.drawCircle(
+    Offset(base.dx + span * 0.16, base.dy - 1),
+    1.3,
+    Paint()..color = const Color(0xFFD97A1E).withValues(alpha: 0.55),
   );
 }
 

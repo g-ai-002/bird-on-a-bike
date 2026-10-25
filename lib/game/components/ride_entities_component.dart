@@ -18,7 +18,7 @@ import 'scene_layer_component.dart';
 /// 骑行者、障碍与拾取物所在的 2.5D 实体层。
 ///
 /// - 精灵堆叠：道具在加载时烘焙成带厚度阴影的 [StackedSprite]；
-///   骑行者每帧变化，用 [paintStacked] 现场叠三层。
+///   骑行者每帧变化，用 [paintStacked] 现场叠两层。
 /// - 3D 装饰器：骑行者套一层 [Rotate3DDecorator]，做轻微的偏航与透视。
 /// - 等距深度排序：按世界 z 由远到近绘制，骑行者插在 z = 0 的位置。
 class RideEntitiesComponent extends SceneLayerComponent {
@@ -30,7 +30,13 @@ class RideEntitiesComponent extends SceneLayerComponent {
     perspective: 0.0011,
   );
   final Paint _shadowPaint = Paint()..color = const Color(0x55202426);
+  final Paint _riderShadowPaint = Paint();
   final Paint _pickupGlow = Paint();
+  final Map<PickupKind, Shader> _glowShaders = <PickupKind, Shader>{};
+
+  /// 每帧复用同一份列表，避免在渲染循环里反复分配。
+  final List<Obstacle> _sortedObstacles = <Obstacle>[];
+  final List<Pickup> _sortedPickups = <Pickup>[];
 
   final Map<ObstacleKind, List<StackedSprite>> _obstacleSprites =
       <ObstacleKind, List<StackedSprite>>{};
@@ -85,17 +91,24 @@ class RideEntitiesComponent extends SceneLayerComponent {
     final state = provider.state;
     if (!state.isPlaying) return;
     _elapsed += dt;
-    _wheelAngle -= state.speed * IsoProjection.pxPerUnit * dt / 24;
+    // 车轮向右滚动：画面坐标 y 向下，角度递增即顺时针。
+    _wheelAngle += state.speed * IsoProjection.pxPerUnit * dt / 24;
     _wingPhase += dt * (state.rider.airborne ? 13.0 : 5.5);
   }
 
   @override
   void render(Canvas canvas) {
     final state = provider.state;
-    final obstacles = List<Obstacle>.of(state.obstacles)
+    _sortedObstacles
+      ..clear()
+      ..addAll(state.obstacles)
       ..sort((a, b) => b.z.compareTo(a.z));
-    final pickups = List<Pickup>.of(state.pickups)
+    _sortedPickups
+      ..clear()
+      ..addAll(state.pickups)
       ..sort((a, b) => b.z.compareTo(a.z));
+    final obstacles = _sortedObstacles;
+    final pickups = _sortedPickups;
 
     _paintShadows(canvas, state, obstacles, pickups);
 
@@ -154,13 +167,16 @@ class RideEntitiesComponent extends SceneLayerComponent {
     );
     final lift = (state.rider.height / 16).clamp(0.0, 0.4);
     final scale = 1 - lift;
+    _riderShadowPaint.color = const Color(
+      0xFF202426,
+    ).withValues(alpha: 0.3 - lift * 0.4);
     canvas.drawOval(
       Rect.fromCenter(
         center: riderGround + const Offset(0, 1),
         width: 104 * scale,
         height: 15 * scale,
       ),
-      Paint()..color = const Color(0x55202426).withValues(alpha: 0.3 - lift * 0.4),
+      _riderShadowPaint,
     );
   }
 
@@ -175,22 +191,32 @@ class RideEntitiesComponent extends SceneLayerComponent {
     sprite.render(canvas, anchor, rotation: sway);
   }
 
+  Shader _glowShader(PickupKind kind) {
+    return _glowShaders.putIfAbsent(kind, () {
+      final color = pickupColor(kind);
+      return Gradient.radial(
+        Offset.zero,
+        24,
+        <Color>[
+          color.withValues(alpha: 0.32),
+          color.withValues(alpha: 0),
+        ],
+      );
+    });
+  }
+
   void _paintPickup(Canvas canvas, Pickup pickup) {
     final sprite = _pickupSprites[pickup.kind];
     if (sprite == null) return;
     final base = IsoProjection.project(pickup.x, pickup.y, pickup.z);
     final bob = math.sin(_elapsed * 2.6 + pickup.phase) * 3.4;
     final center = base + Offset(0, -bob);
-    final color = pickupColor(pickup.kind);
-    _pickupGlow.shader = Gradient.radial(
-      center,
-      24,
-      <Color>[
-        color.withValues(alpha: 0.32),
-        color.withValues(alpha: 0),
-      ],
-    );
-    canvas.drawCircle(center, 24, _pickupGlow);
+
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    _pickupGlow.shader = _glowShader(pickup.kind);
+    canvas.drawCircle(Offset.zero, 24, _pickupGlow);
+    canvas.restore();
 
     final pulse = 1 + math.sin(_elapsed * 3.1 + pickup.phase) * 0.04;
     final tilt = pickup.kind == PickupKind.fish
@@ -226,7 +252,8 @@ class RideEntitiesComponent extends SceneLayerComponent {
         tilted,
         size: kRiderArtSize,
         painter: (inner, size) => paintPelicanRider(inner, size, look),
-        step: const Offset(-1.0, 1.8),
+        layers: 2,
+        step: const Offset(-0.9, 1.6),
       );
     }, canvas);
     canvas.restore();
