@@ -33,7 +33,7 @@
 | Java (source/target)                      | 21                                                     |
 | 目标平台                                  | Android (arm64-v8a)、Windows (x64)、Web (GitHub Pages) |
 
-发布产物：Android APK（`android-arm64`）、Windows ZIP（`windows-x86_64`）、Web 站点（`gh-pages`，每个 tag 一个子目录），由 GitHub Actions 与 Gitea Actions 双流水线构建。
+发布产物：Android APK（`android-arm64`）、Windows ZIP（`windows-x86_64`）、Web 站点（`gh-pages`，每个 tag 一个子目录 + `debug` 预览）与 Web ZIP（`web`），由 GitHub Actions 与 Gitea Actions 双流水线构建。
 
 ---
 

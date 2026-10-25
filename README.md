@@ -70,6 +70,11 @@
 
 - 版本列表：<https://g-ai-002.github.io/bird-on-a-bike/>
 - 当前版本：<https://g-ai-002.github.io/bird-on-a-bike/v0.5.0/>
+- 预览版：<https://g-ai-002.github.io/bird-on-a-bike/debug/>
+
+非 tag 触发（手动运行 `Build & Release` 工作流）构建出来的站点会发到 `debug/`
+目录，方便合并前验证效果；tag 触发时除了更新 `v<版本>/`，还会把 Web 产物
+`<仓库名>-<版本>-web.zip` 一并归档到 GitHub Release，与 APK、Windows ZIP 放在一起。
 
 Pages 首次使用需在仓库 Settings → Pages 里把发布来源设为 `gh-pages` 分支的
 根目录；之后每次推送 tag 都会自动更新站点（含版本索引页与 `versions.json`）。
@@ -128,7 +133,7 @@ flutter test
 
 推送 `v*` 标签会触发 GitHub Actions 与 Gitea Actions 双流水线：
 
-- GitHub Actions：Android APK、Windows ZIP、Web 版（发布到 GitHub Pages），并创建 GitHub Release
+- GitHub Actions：Android APK、Windows ZIP、Web 版（发布到 GitHub Pages 并把 `-web.zip` 归档到 Release），并创建 GitHub Release
 - Gitea Actions：Android APK、Windows ZIP，并创建 Gitea Release
 
 ```bash
@@ -138,7 +143,8 @@ git push origin v0.5.0
 
 Web 版按 tag 分目录保存在 `gh-pages` 分支（`v0.5.0/`、`v0.4.0/` …），根目录的
 版本索引页由 `.github/pages/index.template.html` 渲染，每次发布都会重新生成版本列表；
-同一时刻只允许一个 Web 发布任务写 `gh-pages`，避免并发覆盖。
+非 tag 运行（手动触发）写入 `debug/` 目录、不碰已有版本，同一时刻只允许一个
+Web 发布任务写 `gh-pages`，避免并发覆盖。
 
 应用内版本号位于 `lib/utils/constants.dart` 的 `AppConstants.version`，发版时需与
 `pubspec.yaml` 的 `version` 同步。

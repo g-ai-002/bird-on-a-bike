@@ -419,7 +419,7 @@ def build_markdown(info, pub_order, pub_refs, pub_types, pub_latest, build_lates
     lines.append('')
 
     pipelines = 'GitHub Actions 与 Gitea Actions 双流水线' if (ROOT / '.gitea/workflows/build.yml').exists() else 'GitHub Actions 流水线'
-    lines.append(f'发布产物：Android APK（`android-arm64`）、Windows ZIP（`windows-x86_64`）、Web 站点（`gh-pages`，每个 tag 一个子目录），由 {pipelines}构建。\n')
+    lines.append(f'发布产物：Android APK（`android-arm64`）、Windows ZIP（`windows-x86_64`）、Web 站点（`gh-pages`，每个 tag 一个子目录 + `debug` 预览）与 Web ZIP（`web`），由 {pipelines}构建。\n')
     lines.append('---\n')
 
     # ---- Flutter 运行时依赖 / 开发依赖 ----

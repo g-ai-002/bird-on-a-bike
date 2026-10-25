@@ -75,6 +75,7 @@
   - [x] 玩法提示补齐上滑跳跃，脚踏板加大、眼珠朝向前方
   - [x] Web 适配：条件导入隔离 `dart:io` / `path_provider` / `window_manager`，Web 端日志走内存
   - [x] GitHub Actions 新增 Web 构建，按 tag 发布到 `gh-pages` 的子目录，历史版本共存
+  - [x] 非 tag 触发把 Web 站点发到 `debug/` 预览目录，tag 触发把 `-web.zip` 归档进 Release
   - [x] 版本索引页模板 `.github/pages/index.template.html` 与 `versions.json` 自动生成
   - [x] 版本号 0.4.0 → 0.5.0
   - [x] 更新 README / plan / versions
