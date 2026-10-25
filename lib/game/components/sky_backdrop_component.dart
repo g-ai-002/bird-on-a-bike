@@ -39,6 +39,14 @@ class SkyBackdropComponent extends SceneLayerComponent {
   static const double _cloudWrap = AppConstants.worldWidth + 320.0;
   static const double _cloudOffsetX = 160.0;
 
+  /// 山脊平铺参数：每个平铺块由 [_ridgeHumps] 个山包组成，
+  /// 峰高按块内序号循环，整块平移取模时首尾完全一致，不会回绕跳格。
+  static const double _ridgeFarPeriod = 300;
+  static const double _ridgeNearPeriod = 214;
+  static const int _ridgeHumps = 6;
+  static const double _ridgeFarTile = _ridgeFarPeriod * _ridgeHumps;
+  static const double _ridgeNearTile = _ridgeNearPeriod * _ridgeHumps;
+
   final Paint _imagePaint = Paint()
     ..filterQuality = FilterQuality.medium;
   final Paint _cloudBody = Paint()..color = _cloud.withValues(alpha: 0.8);
@@ -109,20 +117,20 @@ class SkyBackdropComponent extends SceneLayerComponent {
     });
     _cloudPicture = _record(_paintCloudStrip);
     _ridgeFarPicture = _record(
-      (canvas) => _paintRidge(
+      (canvas) => _paintRidgeTile(
         canvas,
         baseY: IsoProjection.horizonY + 4,
-        period: 300,
+        period: _ridgeFarPeriod,
         peak: 54,
         phase: 1.2,
         paint: _ridgeFar,
       ),
     );
     _ridgeNearPicture = _record(
-      (canvas) => _paintRidge(
+      (canvas) => _paintRidgeTile(
         canvas,
         baseY: IsoProjection.horizonY + 8,
-        period: 214,
+        period: _ridgeNearPeriod,
         peak: 36,
         phase: 3.4,
         paint: _ridgeNear,
@@ -179,8 +187,18 @@ class SkyBackdropComponent extends SceneLayerComponent {
     _drawStrip(canvas, _cloudPicture!, cloudShift, y: bob);
     _drawStrip(canvas, _cloudPicture!, cloudShift + _cloudWrap, y: bob);
 
-    _drawStrip(canvas, _ridgeFarPicture!, -(travel * 0.16) % 300);
-    _drawStrip(canvas, _ridgeNearPicture!, -(travel * 0.28) % 214);
+    _drawTiled(
+      canvas,
+      _ridgeFarPicture!,
+      -(travel * 0.16) % _ridgeFarTile,
+      _ridgeFarTile,
+    );
+    _drawTiled(
+      canvas,
+      _ridgeNearPicture!,
+      -(travel * 0.28) % _ridgeNearTile,
+      _ridgeNearTile,
+    );
 
     _drawStaticLayer(canvas, _seaImage, _seaPicture!, _seaRegion);
     _paintWaveGlints(canvas, travel);
@@ -193,6 +211,20 @@ class SkyBackdropComponent extends SceneLayerComponent {
     canvas.restore();
   }
 
+  /// 平铺绘制：把平移量对齐到整数像素，避免矢量边缘逐帧重采样产生抖动。
+  void _drawTiled(
+    Canvas canvas,
+    Picture picture,
+    double shift,
+    double tileWidth,
+  ) {
+    final snapped = shift.roundToDouble();
+    final copies = (width / tileWidth).ceil() + 1;
+    for (var i = 0; i < copies; i++) {
+      _drawStrip(canvas, picture, snapped + i * tileWidth);
+    }
+  }
+
   Picture _record(void Function(Canvas canvas) painter) {
     final recorder = PictureRecorder();
     final canvas = Canvas(recorder);
@@ -201,9 +233,11 @@ class SkyBackdropComponent extends SceneLayerComponent {
   }
 
   /// 静态层的位图按相机缩放重建：窗口放大或移到高 DPI 屏后仍然清晰。
+  /// 撞击推镜只有几个百分点的缩放脉冲，不触发重建，避免瞬时重分配大纹理。
   void _ensureImages() {
-    final bucket = (rasterScale() * 4).round() / 4;
-    if (_imagesReady && bucket == _imageBucket) return;
+    final scale = rasterScale();
+    if (_imagesReady && (scale - _imageBucket).abs() < 0.2) return;
+    final bucket = (scale * 4).round() / 4;
     _skyImage?.dispose();
     _seaImage?.dispose();
     _skyImage = _rasterize(_skyPicture!, _skyRegion, bucket);
@@ -413,7 +447,9 @@ class SkyBackdropComponent extends SceneLayerComponent {
     );
   }
 
-  void _paintRidge(
+  /// 一段可平铺的山脊：峰高按块内序号循环，首尾都落在 [baseY]，
+  /// 因此整块平移取模时衔接完全一致，不会出现「回绕时整排山跳一格」。
+  void _paintRidgeTile(
     Canvas canvas, {
     required double baseY,
     required double period,
@@ -421,20 +457,20 @@ class SkyBackdropComponent extends SceneLayerComponent {
     required double phase,
     required Paint paint,
   }) {
-    final path = Path()..moveTo(-period, baseY);
-    var i = -1;
-    while (i * period < width + period) {
+    final tileWidth = period * _ridgeHumps;
+    final path = Path()..moveTo(0, baseY);
+    for (var i = 0; i < _ridgeHumps; i++) {
+      final h = peak *
+          (0.5 + 0.5 * math.sin(2 * math.pi * i / _ridgeHumps + phase).abs());
       final x = i * period;
-      final h = peak * (0.5 + 0.5 * math.sin(i * 1.7 + phase).abs());
       path
         ..lineTo(x, baseY)
         ..quadraticBezierTo(x + period * 0.5, baseY - h * 1.7, x + period, baseY);
-      i++;
     }
     // 山脊只需要填到自身基准线：更下方的部分随后会被海面位图盖住。
     path
-      ..lineTo(width + period, baseY + 2)
-      ..lineTo(-period, baseY + 2)
+      ..lineTo(tileWidth, baseY + 2)
+      ..lineTo(0, baseY + 2)
       ..close();
     canvas.drawPath(path, paint);
   }
