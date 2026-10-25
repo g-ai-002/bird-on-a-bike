@@ -75,6 +75,7 @@ class _GamePageState extends State<GamePage> {
 
   @override
   void dispose() {
+    _game?.detachProvider();
     _provider?.removeListener(_handleGameState);
     _hintTimer?.cancel();
     if (_isMobile) {
@@ -173,84 +174,87 @@ class _GamePageState extends State<GamePage> {
 
   Widget _buildHud() {
     final colors = Theme.of(context).colorScheme;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-        child: Column(
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _circleNavButton(
-                  Icons.arrow_back,
-                  () => Navigator.pop(context),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: IgnorePointer(child: _buildStats(colors)),
-                ),
-                const SizedBox(width: 8),
-                Consumer<GameProvider>(
-                  builder: (context, game, _) {
-                    final state = game.state;
-                    final chips = <Widget>[
-                      if (state.hasShield)
-                        _EffectChip(
-                          icon: Icons.shield_outlined,
-                          label: '护盾 ×${state.shieldCharges}',
-                          color: RideColors.shield,
-                        ),
-                      if (state.magnetActive)
-                        _EffectChip(
-                          icon: Icons.attractions,
-                          label: '磁铁 ${state.magnetRemaining.ceil()}s',
-                          color: RideColors.magnet,
-                        ),
-                    ];
-                    final showPause = game.isPlaying || game.isPaused;
-                    if (!showPause && chips.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (showPause)
-                          _circleNavButton(
-                            game.isPaused ? Icons.play_arrow : Icons.pause,
-                            game.togglePause,
+    // HUD 以 10Hz 更新，单独作为重绘边界，避免连带整页合成。
+    return RepaintBoundary(
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+          child: Column(
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _circleNavButton(
+                    Icons.arrow_back,
+                    () => Navigator.pop(context),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: IgnorePointer(child: _buildStats(colors)),
+                  ),
+                  const SizedBox(width: 8),
+                  Consumer<GameProvider>(
+                    builder: (context, game, _) {
+                      final state = game.state;
+                      final chips = <Widget>[
+                        if (state.hasShield)
+                          _EffectChip(
+                            icon: Icons.shield_outlined,
+                            label: '护盾 ×${state.shieldCharges}',
+                            color: RideColors.shield,
                           ),
-                        if (chips.isNotEmpty) const SizedBox(height: 8),
-                        if (chips.isNotEmpty)
-                          IgnorePointer(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                for (final chip in chips)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 4),
-                                    child: chip,
-                                  ),
-                              ],
+                        if (state.magnetActive)
+                          _EffectChip(
+                            icon: Icons.attractions,
+                            label: '磁铁 ${state.magnetRemaining.ceil()}s',
+                            color: RideColors.magnet,
+                          ),
+                      ];
+                      final showPause = game.isPlaying || game.isPaused;
+                      if (!showPause && chips.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (showPause)
+                            _circleNavButton(
+                              game.isPaused ? Icons.play_arrow : Icons.pause,
+                              game.togglePause,
                             ),
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ],
-            ),
-            const Spacer(),
-            IgnorePointer(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 320),
-                child: _showHint
-                    ? _buildHint()
-                    : const SizedBox.shrink(),
+                          if (chips.isNotEmpty) const SizedBox(height: 8),
+                          if (chips.isNotEmpty)
+                            IgnorePointer(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  for (final chip in chips)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 4),
+                                      child: chip,
+                                    ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
               ),
-            ),
-          ],
+              const Spacer(),
+              IgnorePointer(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 320),
+                  child: _showHint
+                      ? _buildHint()
+                      : const SizedBox.shrink(),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

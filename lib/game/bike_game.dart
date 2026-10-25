@@ -139,7 +139,24 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
     _updateBaseZoom(size);
     camera.viewfinder.position = _cameraBase;
     camera.viewfinder.zoom = _baseZoom;
+    // 状态切换由 provider 通知驱动：引擎暂停后 update 不再执行，
+    // 用监听器才能收到「继续」并重启主循环。
+    provider.addListener(_handleProviderChange);
     _ready = true;
+  }
+
+  @override
+  void onRemove() {
+    detachProvider();
+    super.onRemove();
+  }
+
+  /// 断开对 provider 的监听。
+  ///
+  /// GameWidget 销毁时 Flame 只回调 `onDetach`，`onRemove` 不一定会执行，
+  /// 因此由 GamePage 在 dispose 时显式调用一次（重复移除是安全的）。
+  void detachProvider() {
+    provider.removeListener(_handleProviderChange);
   }
 
   @override
@@ -160,6 +177,11 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
     } catch (_) {
       _devicePixelRatio = 1;
     }
+  }
+
+  void _handleProviderChange() {
+    if (!_ready) return;
+    _handleStatusChange(provider.state.status);
   }
 
   void _updateBaseZoom(Vector2 canvasSize) {
@@ -253,11 +275,7 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
     _updateFeedback(visualDt);
     _updateGameOverOverlay(dt);
 
-    final status = provider.state.status;
-    if (status != _lastStatus) {
-      _handleStatusChange(status);
-    }
-    if (status != GameStatus.playing) return;
+    if (provider.state.status != GameStatus.playing) return;
 
     if (_countdownActive) {
       _updateCountdown(dt);
@@ -276,12 +294,15 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
 
     if (status == GameStatus.paused) {
       overlays.add(pauseOverlayId, priority: 20);
+      // 暂停后画面完全静止，停掉主循环省下每帧的整屏重绘。
+      pauseEngine();
       return;
     }
 
     overlays.remove(pauseOverlayId);
 
     if (status == GameStatus.playing) {
+      resumeEngine();
       if (previous == GameStatus.idle || previous == GameStatus.over) {
         _resetForNewGame();
         _startCountdown();
@@ -290,11 +311,13 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
     }
 
     if (status == GameStatus.over) {
+      resumeEngine();
       _triggerCrash();
       return;
     }
 
     if (status == GameStatus.idle) {
+      resumeEngine();
       _countdownActive = false;
       countdown.value = 0;
       overlays.remove(countdownOverlayId);
@@ -466,6 +489,8 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
     if (_gameOverOverlayDelay <= 0) {
       _gameOverOverlayPending = false;
       overlays.add(gameOverOverlayId, priority: 20);
+      // 撞击反馈播完后画面定格在结算遮罩下，停掉主循环不再整屏重绘。
+      pauseEngine();
     }
   }
 }
