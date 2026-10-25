@@ -202,12 +202,6 @@ jobs:
       - name: 🏗️ 生成 Windows 平台文件
         run: flutter create --platforms=windows --project-name ${{ needs.metadata.outputs.project_name }} .
 
-      - name: 🩹 Windows runner 启用 Flutter GPU
-        shell: bash
-        run: |
-          sed -i 's|flutter::DartProject project(L"data");|flutter::DartProject project(L"data");\n  project.set_enable_flutter_gpu(true);|' windows/runner/main.cpp
-          grep -n 'set_enable_flutter_gpu' windows/runner/main.cpp
-
       - name: 🩹 CMakeLists 启用 CMP0091 策略（audioplayers_windows 4.x + VS 2026 要求）
         shell: bash
         run: |

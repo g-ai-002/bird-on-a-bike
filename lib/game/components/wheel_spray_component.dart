@@ -7,7 +7,7 @@ import '../../providers/game_provider.dart';
 import '../../utils/constants.dart';
 import '../world_layout.dart';
 
-/// 后轮扬起的水雾：纯屏幕空间粒子，不参与 3D 渲染。
+/// 后轮扬起的水雾：纯屏幕空间粒子，不参与场景层渲染。
 class WheelSprayComponent extends PositionComponent {
   WheelSprayComponent({required this.provider, super.priority})
     : super(

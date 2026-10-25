@@ -1,9 +1,9 @@
 # 鹈鹕骑单车 🚴
 
-一只鹈鹕骑着单车沿海岸线疾驰的 3D 躲避小游戏，基于 Flutter、Flame 与
-flutter_scene 开发，支持 Android 与 Windows 双平台。玩法坐标、碰撞与计分都在
-3D 世界空间（10 单位 = 1 米）中计算，画面是低多边形 3D 场景配合动态相机；
-设备不支持 Flutter GPU 时会给出明确提示。
+一只鹈鹕骑着单车沿海岸线疾驰的 2.5D 躲避小游戏，基于 Flutter 与 Flame
+开发，支持 Android 与 Windows 双平台。玩法坐标、碰撞与计分都在世界空间
+（10 单位 = 1 米）中计算，画面用固定机位的等距投影、精灵堆叠与多层视差
+滚动来呈现海岸公路的纵深，不再依赖 Flutter GPU 或 flutter_scene。
 
 ## 玩法
 
@@ -17,16 +17,15 @@ flutter_scene 开发，支持 Android 与 Windows 双平台。玩法坐标、碰
 
 ## 功能
 
-- 🧊 flutter_scene 全量 3D：渐变黄昏天空、海面、远山与低多边形鹈鹕 / 自行车
-- 🌅 黄昏海岸视差：云、海浪、山影随速度滚动
+- 🧊 固定机位 2.5D：等距路面 + 侧视角色，前进方向保持水平
+- 🧱 精灵堆叠：低多边形道具与鹈鹕按多层压暗的切片叠出体积感
+- 🎞️ 3D 装饰器：骑行者套 `Rotate3DDecorator`，带轻微偏航与透视
+- 🌅 多层视差：云、远山、海浪、路面与近景草丛按不同倍率滚动
 - 🐟 小鱼、护盾、磁铁三类拾取物与连击计分
 - 🪧 地面障碍与悬空横幅两种躲避方式（跳跃 / 俯身）
 - 🎞️ 二段跳、可变跳跃高度、俯身加速下坠
 - 💥 撞击慢动作、镜头震动、红闪与结算遮罩
 - ⏱️ 开局 3-2-1-GO 倒计时与暂停遮罩
-- 🎨 3D 鹈鹕与自行车：蹬踏、扇翅、围巾、护盾与磁铁光环
-- 🎥 动态 3D 相机：随车速后拉、跟随跳跃抬高视线
-- 🛟 Flutter GPU 不可用时给出提示，不再降级到 2D 渲染
 - 🏅 排行榜、最高分与最远距离持久化
 - 🌓 深色 / 浅色主题与三档难度
 - 🎵 程序化生成音效与循环背景音乐，无需外部音频资源
@@ -63,28 +62,30 @@ flutter_scene 开发，支持 Android 与 Windows 双平台。玩法坐标、碰
 
 ### 运行
 
-flutter_scene 渲染依赖 Flutter GPU。Android 已在 `AndroidManifest.xml` 中开启；
-本地调试其他原生平台时在命令行加上开关：
-
 ```bash
 flutter pub get
-flutter run --enable-flutter-gpu
+flutter run
 ```
 
-Windows 平台文件不入库，首次本地构建前先执行：
+Android 与 Windows 使用同一套 Flame 渲染，无需开启 Flutter GPU，也不再需要
+平台侧的额外开关。Windows 平台文件不入库，首次本地构建前先执行：
 
 ```bash
 flutter create --platforms=windows --project-name bird_on_a_bike .
 ```
 
-生成后把 Flutter GPU 开关写进 runner（release 构建需要，CI 里同一步由流水线执行）：
+### 渲染结构
 
-```bash
-sed -i 's|flutter::DartProject project(L"data");|flutter::DartProject project(L"data");\n  project.set_enable_flutter_gpu(true);|' windows/runner/main.cpp
-```
+| 图层 | 组件 | 作用 |
+|------|------|------|
+| 远景 | `SkyBackdropComponent` | 渐变天空、落日、云、远山、灯塔与海面 |
+| 路面 | `RoadComponent` | 等距沥青带、沙带、车道虚线、椰树与草丛 |
+| 实体 | `RideEntitiesComponent` | 骑行者、障碍与拾取物，按路面深度排序 |
+| 近景 | `ShoreForegroundComponent` | 画面下沿的草丛与碎石剪影 |
+| 特效 | `SpeedLines` / `WheelSpray` / `Vignette` 等 | 屏幕空间速度线、水雾、暗角与粒子 |
 
-若 GPU 初始化失败，游戏会记录日志并显示「无法启动 3D 场景」的提示页，
-不会启动玩法。
+世界坐标约定与投影见 `lib/game/world_layout.dart`、`lib/game/iso_projection.dart`；
+道具画法与精灵堆叠见 `lib/game/painting/`、`lib/game/rendering/`。
 
 ### 测试与静态检查
 
@@ -109,9 +110,8 @@ git push origin v0.4.0
 ## 技术栈
 
 - Flutter 3.47.7
-- Flame 1.38.2（游戏主循环、输入、遮罩与屏幕空间特效）
-- flutter_scene 0.24.3（全量 3D 场景与 Flutter GPU 渲染）
-- vector_math（3D 变换）
+- Flame 1.38.2（游戏主循环、组件树、3D 装饰器、输入与遮罩）
+- 自绘 Canvas 精灵（程序化低多边形画法 + 精灵堆叠烘焙）
 - Provider 状态管理
 - Material 3 设计
 - SharedPreferences 持久化

@@ -13,8 +13,11 @@ import '../utils/constants.dart';
 import 'bike_world.dart';
 import 'components/death_flash_component.dart';
 import 'components/particle_burst_component.dart';
+import 'components/ride_entities_component.dart';
+import 'components/road_component.dart';
 import 'components/score_popup_layer.dart';
-import 'components/scene3d_component.dart';
+import 'components/shore_foreground_component.dart';
+import 'components/sky_backdrop_component.dart';
 import 'components/speed_lines_component.dart';
 import 'components/vignette_component.dart';
 import 'components/wheel_spray_component.dart';
@@ -22,10 +25,10 @@ import 'input/ride_input_component.dart';
 import 'ride_style.dart';
 import 'world_layout.dart';
 
-/// 基于 Flame 主循环的 3D 海岸骑行游戏。
+/// 基于 Flame 主循环的 2.5D 海岸骑行游戏。
 ///
-/// 规则、碰撞与计分都在 [GameProvider] 中；场景与角色由 flutter_scene 的
-/// 3D 场景呈现，这里只负责世界组装、输入分发、相机反馈与遮罩调度。
+/// 规则、碰撞与计分都在 [GameProvider] 中；画面由远景视差、等距路面、
+/// 精灵堆叠的实体层与屏幕空间特效叠成，不再依赖 Flutter GPU。
 class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
   BikeGame({required this.provider})
       : super(
@@ -39,7 +42,6 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
   static const String pauseOverlayId = 'pause';
   static const String countdownOverlayId = 'countdown';
   static const String gameOverOverlayId = 'gameOver';
-  static const String unsupported3DOverlayId = 'unsupported3d';
 
   final GameProvider provider;
 
@@ -99,17 +101,11 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
       priority: 100,
     );
 
-    final scene3d = Scene3DComponent(provider: provider, priority: 0);
-    final ready = await scene3d.prepare();
-
-    if (!ready) {
-      // 没有可用的 Flutter GPU：不再保留 2D 回退，直接提示设备不支持。
-      overlays.add(unsupported3DOverlayId, priority: 30);
-      return;
-    }
-
-    await world.addAll(<Component>[
-      scene3d,
+    final scene = <Component>[
+      SkyBackdropComponent(provider: provider, priority: -50),
+      RoadComponent(provider: provider, priority: -40),
+      RideEntitiesComponent(provider: provider, priority: 0),
+      ShoreForegroundComponent(provider: provider, priority: 6),
       VignetteComponent(priority: 8),
       _spray,
       _speedLines,
@@ -117,7 +113,9 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
       _flash,
       _input,
       _popups,
-    ]);
+    ];
+
+    await world.addAll(scene);
 
     camera.viewfinder.position = _cameraBase;
     camera.viewfinder.zoom = 1;

@@ -34,7 +34,7 @@ extension ObstacleKindInfo on ObstacleKind {
     }
   }
 
-  /// 沿路面深度方向的厚度，用于 3D 碰撞盒。
+  /// 沿路面深度方向的厚度，用于深度碰撞盒。
   double get depth {
     switch (this) {
       case ObstacleKind.rock:

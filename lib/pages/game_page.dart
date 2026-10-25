@@ -10,7 +10,6 @@ import '../game/bike_game.dart';
 import '../game/overlays/countdown_overlay.dart';
 import '../game/overlays/game_over_overlay.dart';
 import '../game/overlays/pause_overlay.dart';
-import '../game/overlays/unsupported_3d_overlay.dart';
 import '../game/ride_style.dart';
 import '../models/game_state.dart';
 import '../providers/game_provider.dart';
@@ -122,8 +121,6 @@ class _GamePageState extends State<GamePage> {
                 _gameFocusNode.requestFocus();
               },
             ),
-        BikeGame.unsupported3DOverlayId: (_, BikeGame game) =>
-            const Unsupported3DOverlay(),
       },
     );
   }
