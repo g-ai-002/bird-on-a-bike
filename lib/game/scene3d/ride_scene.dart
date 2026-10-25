@@ -39,6 +39,7 @@ class RideScene {
   late final TorusGeometry _thinRing;
   late final DiscGeometry _disc;
   late final IcosphereGeometry _rock;
+  late final CylinderGeometry _bill;
 
   // 共享材质
   late final PhysicallyBasedMaterial _roadMat;
@@ -67,6 +68,11 @@ class RideScene {
   late final PhysicallyBasedMaterial _bannerMat;
   late final PhysicallyBasedMaterial _bannerPoleMat;
   late final PhysicallyBasedMaterial _whiteMat;
+  late final PhysicallyBasedMaterial _rockLightMat;
+  late final PhysicallyBasedMaterial _woodLightMat;
+  late final PhysicallyBasedMaterial _metalMat;
+  late final PhysicallyBasedMaterial _beakDarkMat;
+  late final PhysicallyBasedMaterial _pouchDarkMat;
   late final UnlitMaterial _sunMat;
   late final UnlitMaterial _shadowMat;
   late final UnlitMaterial _fishMat;
@@ -74,6 +80,9 @@ class RideScene {
   late final UnlitMaterial _shieldMat;
   late final UnlitMaterial _magnetMat;
   late final UnlitMaterial _redMat;
+  late final UnlitMaterial _eyeGlintMat;
+  late final UnlitMaterial _edgeMat;
+  late final UnlitMaterial _outlineMat;
 
   // 背景与路面
   final List<Node> _clouds = [];
@@ -101,6 +110,8 @@ class RideScene {
   late final Node _legNearLower;
   late final Node _legFarUpper;
   late final Node _legFarLower;
+  late final Node _footA;
+  late final Node _footB;
 
   final Map<int, Node> _obstacleNodes = {};
   final Map<int, Node> _pickupNodes = {};
@@ -151,7 +162,7 @@ class RideScene {
     _elapsed += dt;
     final state = provider.state;
     if (state.isPlaying) {
-      _wheelAngle += state.speed * dt / 24;
+      _wheelAngle -= state.speed * dt / 24;
       _wingPhase += dt * (state.rider.airborne ? 13.0 : 5.5);
     }
 
@@ -172,24 +183,15 @@ class RideScene {
 
   void _createAssets() {
     _cube = CuboidGeometry(vm.Vector3(1, 1, 1));
-    _cylinder = CylinderGeometry(radialSegments: 16);
-    _cone = CylinderGeometry(topRadius: 0, radialSegments: 16);
-    _sphere = SphereGeometry(radius: 1, segments: 20, rings: 12);
-    _ring = TorusGeometry(
-      radius: 1,
-      tubeRadius: 0.12,
-      radialSegments: 24,
-      tubularSegments: 8,
-    );
-    _rimRing = TorusGeometry(
-      radius: 1,
-      tubeRadius: 0.04,
-      radialSegments: 24,
-      tubularSegments: 6,
-    );
+    _cylinder = CylinderGeometry(radialSegments: 24);
+    _cone = CylinderGeometry(topRadius: 0, radialSegments: 20);
+    _sphere = SphereGeometry(radius: 1, segments: 28, rings: 18);
+    _ring = TorusGeometry(radius: 1, tubeRadius: 0.12, tubularSegments: 10);
+    _rimRing = TorusGeometry(radius: 1, tubeRadius: 0.04, tubularSegments: 8);
     _thinRing = TorusGeometry(radius: 1, tubeRadius: 0.02, tubularSegments: 6);
-    _disc = DiscGeometry(radius: 1, segments: 24);
-    _rock = IcosphereGeometry(radius: 1, subdivisions: 1);
+    _disc = DiscGeometry(radius: 1);
+    _rock = IcosphereGeometry(radius: 1);
+    _bill = CylinderGeometry(topRadius: 0.12, radialSegments: 20);
 
     _roadMat = _pbr(RideColors.road, roughness: 0.95);
     _sandMat = _pbr(const Color(0xFFB98A5A), roughness: 0.95);
@@ -217,6 +219,11 @@ class RideScene {
     _bannerMat = _pbr(RideColors.banner);
     _bannerPoleMat = _pbr(RideColors.bannerPole, roughness: 0.9);
     _whiteMat = _pbr(const Color(0xFFFFF6E8), roughness: 0.8);
+    _rockLightMat = _pbr(const Color(0xFFB6B6B6), roughness: 1.0);
+    _woodLightMat = _pbr(const Color(0xFFD9A066), roughness: 0.9);
+    _metalMat = _pbr(const Color(0xFFB8C2C8), roughness: 0.35, metallic: 0.8);
+    _beakDarkMat = _pbr(const Color(0xFFD97A1E), roughness: 0.5);
+    _pouchDarkMat = _pbr(const Color(0xFFE08A2E), roughness: 0.75);
     _sunMat = _unlit(RideColors.sun);
     _shadowMat = _unlit(const Color(0xFF2A2A2A));
     _fishMat = _unlit(RideColors.fish);
@@ -224,6 +231,9 @@ class RideScene {
     _shieldMat = _unlit(RideColors.shield);
     _magnetMat = _unlit(RideColors.magnet);
     _redMat = _unlit(const Color(0xFFE05A5A));
+    _eyeGlintMat = _unlit(const Color(0xFFFFFDF2));
+    _edgeMat = _unlit(const Color(0xFFFFE2A8));
+    _outlineMat = _unlit(const Color(0xFF151515));
   }
 
   // ---------------------------------------------------------------------------
@@ -387,6 +397,74 @@ class RideScene {
         scale: vm.Vector3.all(0.62),
         rotation: vm.Quaternion.axisAngle(_xAxis, math.pi / 2),
       ),
+      _rod(
+        crank + vm.Vector3(0, 0.26, 0.24),
+        rear + vm.Vector3(0, 0.26, 0.24),
+        0.035,
+        _tyreMat,
+      ),
+      _rod(
+        crank + vm.Vector3(0, -0.26, 0.24),
+        rear + vm.Vector3(0, -0.26, 0.24),
+        0.035,
+        _tyreMat,
+      ),
+      _box(vm.Vector3(2.9, 0.1, 0.55), _frameMat, vm.Vector3(2.7, 4.92, 0)),
+      _box(vm.Vector3(2.9, 0.1, 0.55), _frameMat, vm.Vector3(-2.7, 4.92, 0)),
+      _rod(
+        vm.Vector3(2.25, 5.35, -0.65),
+        vm.Vector3(2.25, 5.35, 0.65),
+        0.11,
+        _frameDarkMat,
+      ),
+      _node(
+        _sphere,
+        _metalMat,
+        position: vm.Vector3(2.25, 5.35, 0.7),
+        scale: vm.Vector3.all(0.12),
+      ),
+      _node(
+        _sphere,
+        _metalMat,
+        position: vm.Vector3(2.05, 5.58, 0.3),
+        scale: vm.Vector3.all(0.16),
+      ),
+      _rod(
+        head + vm.Vector3(0, 0, 0.22),
+        front + vm.Vector3(0, 0, 0.22),
+        0.055,
+        _frameDarkMat,
+      ),
+      _rod(
+        head + vm.Vector3(0, 0, -0.22),
+        front + vm.Vector3(0, 0, -0.22),
+        0.055,
+        _frameDarkMat,
+      ),
+      _rod(
+        vm.Vector3(-1.45, 4.68, 0.35),
+        vm.Vector3(-0.95, 4.38, 0.35),
+        0.04,
+        _metalMat,
+      ),
+      _rod(
+        vm.Vector3(-1.45, 4.68, -0.35),
+        vm.Vector3(-0.95, 4.38, -0.35),
+        0.04,
+        _metalMat,
+      ),
+      for (final x in <double>[1.95, 2.35, 2.75])
+        _box(
+          vm.Vector3(0.08, 0.9, 0.06),
+          _crateDarkMat,
+          vm.Vector3(x, 5.0, -0.53),
+        ),
+      for (final y in <double>[4.75, 5.25])
+        _box(
+          vm.Vector3(1.1, 0.06, 0.06),
+          _crateDarkMat,
+          vm.Vector3(2.35, y, -0.53),
+        ),
     ]);
 
     _crankArmA = _rod(crank, crank, 0.07, _frameDarkMat);
@@ -401,7 +479,9 @@ class RideScene {
       _frameDarkMat,
       vm.Vector3.zero(),
     );
-    _rider.addAll([_crankArmA, _crankArmB, _pedalA, _pedalB]);
+    _footA = _box(vm.Vector3(0.6, 0.12, 0.28), _legMat, vm.Vector3.zero());
+    _footB = _box(vm.Vector3(0.6, 0.12, 0.28), _legMat, vm.Vector3.zero());
+    _rider.addAll([_crankArmA, _crankArmB, _pedalA, _pedalB, _footA, _footB]);
 
     _buildPelican();
 
@@ -458,6 +538,7 @@ class RideScene {
     _torso = Node()..position = vm.Vector3(-0.5, 6.0, 0);
     _rider.add(_torso);
 
+    // 躯干：主身体、腹部阴影、胸口
     _torso.add(
       _node(
         _sphere,
@@ -468,55 +549,200 @@ class RideScene {
     );
     _torso.add(
       _node(
-        _cone,
+        _sphere,
         _featherShadeMat,
-        position: vm.Vector3(-1.9, 0.7, 0),
-        scale: vm.Vector3(1.8, 1.0, 1.2),
-        rotation: vm.Quaternion.axisAngle(_zAxis, math.pi / 2),
+        position: vm.Vector3(0.7, -0.05, 0.25),
+        scale: vm.Vector3(1.8, 0.65, 1.35),
       ),
     );
-
-    final neckStart = vm.Vector3(1.2, 1.5, 0);
-    final neckEnd = vm.Vector3(2.4, 3.1, 0);
-    _torso.add(_rod(neckStart, neckEnd, 0.5, _featherMat));
-
     _torso.add(
       _node(
         _sphere,
         _featherMat,
-        position: vm.Vector3(2.6, 3.3, 0),
-        scale: vm.Vector3.all(1.05),
+        position: vm.Vector3(2.0, 1.0, 0.05),
+        scale: vm.Vector3(1.45, 1.5, 1.45),
+      ),
+    );
+
+    // 尾羽
+    _torso.add(
+      _node(
+        _cone,
+        _featherShadeMat,
+        position: vm.Vector3(-2.2, 0.5, 0),
+        scale: vm.Vector3(1.9, 1.2, 1.0),
+        rotation: vm.Quaternion.axisAngle(_zAxis, math.pi / 2),
+      ),
+    );
+    _torso.add(
+      _node(
+        _cone,
+        _featherShadeMat,
+        position: vm.Vector3(-2.0, 0.95, 0.25),
+        scale: vm.Vector3(1.5, 0.8, 0.8),
+        rotation: vm.Quaternion.axisAngle(_zAxis, math.pi / 2 - 0.25),
+      ),
+    );
+    _torso.add(
+      _node(
+        _cone,
+        _featherShadeMat,
+        position: vm.Vector3(-2.0, 0.15, -0.25),
+        scale: vm.Vector3(1.5, 0.8, 0.8),
+        rotation: vm.Quaternion.axisAngle(_zAxis, math.pi / 2 + 0.25),
+      ),
+    );
+
+    // 脖子：三段曲线 + 关节
+    final neck1 = vm.Vector3(1.2, 1.5, 0);
+    final neck2 = vm.Vector3(1.7, 2.3, 0);
+    final neck3 = vm.Vector3(2.2, 2.9, 0);
+    final neck4 = vm.Vector3(2.55, 3.15, 0);
+    _torso.add(_rod(neck1, neck2, 0.54, _featherMat));
+    _torso.add(_rod(neck2, neck3, 0.5, _featherMat));
+    _torso.add(_rod(neck3, neck4, 0.46, _featherMat));
+    _torso.add(
+      _node(_sphere, _featherMat, position: neck2, scale: vm.Vector3.all(0.54)),
+    );
+    _torso.add(
+      _node(_sphere, _featherMat, position: neck3, scale: vm.Vector3.all(0.5)),
+    );
+
+    // 头、脸颊与眼睛
+    _torso.add(
+      _node(
+        _sphere,
+        _featherMat,
+        position: vm.Vector3(2.65, 3.35, 0),
+        scale: vm.Vector3.all(1.1),
+      ),
+    );
+    _torso.add(
+      _node(
+        _sphere,
+        _pouchMat,
+        position: vm.Vector3(2.95, 3.5, 0.75),
+        scale: vm.Vector3(0.55, 0.45, 0.15),
       ),
     );
     _torso.add(
       _node(
         _sphere,
         _eyeMat,
-        position: vm.Vector3(3.2, 3.45, 0.85),
-        scale: vm.Vector3.all(0.18),
+        position: vm.Vector3(3.18, 3.55, 0.95),
+        scale: vm.Vector3.all(0.2),
+      ),
+    );
+    _torso.add(
+      _node(
+        _sphere,
+        _eyeGlintMat,
+        position: vm.Vector3(3.24, 3.62, 1.08),
+        scale: vm.Vector3.all(0.07),
+      ),
+    );
+    _torso.add(
+      _box(
+        vm.Vector3(0.4, 0.12, 0.15),
+        _featherShadeMat,
+        vm.Vector3(3.12, 3.82, 0.82),
       ),
     );
 
-    final beakBase = vm.Vector3(2.9, 3.15, 0);
-    final beakTip = vm.Vector3(4.4, 2.9, 0);
-    _torso.add(_coneRod(beakBase, beakTip, 0.42, _beakMat));
+    // 大嘴：扁长上喙 + 下喙缘 + 钩尖 + 喉囊
+    final billBase = vm.Vector3(3.0, 3.25, 0);
+    final billTip = vm.Vector3(6.3, 2.72, 0);
+    _torso.add(_billRod(billBase, billTip, 0.64, 0.55, _beakMat));
+    _torso.add(
+      _billRod(
+        billBase + vm.Vector3(0, 0.14, -0.02),
+        billTip + vm.Vector3(0, 0.02, -0.02),
+        0.06,
+        0.8,
+        _beakDarkMat,
+      ),
+    );
+    _torso.add(
+      _billRod(
+        billBase + vm.Vector3(0, -0.12, 0),
+        billTip + vm.Vector3(0, -0.06, 0),
+        0.08,
+        0.8,
+        _beakMat,
+      ),
+    );
+    _torso.add(
+      _node(
+        _sphere,
+        _beakDarkMat,
+        position: billTip + vm.Vector3(0.1, -0.16, 0),
+        scale: vm.Vector3(0.22, 0.28, 0.22),
+      ),
+    );
     _torso.add(
       _node(
         _sphere,
         _pouchMat,
-        position: vm.Vector3(3.4, 2.85, 0.2),
-        scale: vm.Vector3(1.15, 0.55, 0.55),
+        position: vm.Vector3(4.4, 2.45, 0.05),
+        scale: vm.Vector3(2.05, 0.62, 0.72),
+      ),
+    );
+    _torso.add(
+      _node(
+        _sphere,
+        _pouchMat,
+        position: vm.Vector3(3.35, 2.55, 0),
+        scale: vm.Vector3(1.0, 0.55, 0.62),
+      ),
+    );
+    _torso.add(
+      _billRod(
+        vm.Vector3(3.25, 2.32, 0),
+        vm.Vector3(6.0, 2.52, 0),
+        0.05,
+        0.7,
+        _pouchDarkMat,
+      ),
+    );
+    _torso.add(
+      _node(
+        _sphere,
+        _eyeMat,
+        position: vm.Vector3(3.55, 3.28, 0.25),
+        scale: vm.Vector3.all(0.06),
+      ),
+    );
+
+    // 冠羽
+    _torso.add(
+      _node(
+        _cone,
+        _featherShadeMat,
+        position: vm.Vector3(2.3, 4.45, 0),
+        scale: vm.Vector3(0.28, 0.95, 0.28),
+        rotation: vm.Quaternion.axisAngle(_zAxis, 0.15),
       ),
     );
     _torso.add(
       _node(
         _cone,
         _featherShadeMat,
-        position: vm.Vector3(2.45, 4.35, 0),
-        scale: vm.Vector3(0.45, 0.8, 0.45),
+        position: vm.Vector3(2.0, 4.3, 0),
+        scale: vm.Vector3(0.22, 0.75, 0.22),
+        rotation: vm.Quaternion.axisAngle(_zAxis, 0.35),
+      ),
+    );
+    _torso.add(
+      _node(
+        _cone,
+        _featherShadeMat,
+        position: vm.Vector3(2.55, 4.3, 0),
+        scale: vm.Vector3(0.18, 0.65, 0.18),
+        rotation: vm.Quaternion.axisAngle(_zAxis, -0.25),
       ),
     );
 
+    // 双翼：肩部、主翼、翼尖与羽层
     _nearWing = Node()..position = vm.Vector3(0.6, 1.6, 0.9);
     _farWing = Node()..position = vm.Vector3(0.6, 1.6, -0.85);
     _torso.add(_nearWing);
@@ -525,27 +751,55 @@ class RideScene {
       _node(
         _sphere,
         _featherMat,
-        position: vm.Vector3(-0.9, 0, 0),
-        scale: vm.Vector3(1.9, 1.0, 0.32),
+        position: vm.Vector3(-1.0, 0, 0),
+        scale: vm.Vector3(2.0, 1.05, 0.35),
+      ),
+    );
+    _nearWing.add(
+      _node(
+        _sphere,
+        _featherShadeMat,
+        position: vm.Vector3(-2.1, -0.1, 0.02),
+        scale: vm.Vector3(1.1, 0.62, 0.3),
+      ),
+    );
+    for (final x in <double>[-1.2, -1.7, -2.2]) {
+      _nearWing.add(
+        _node(
+          _sphere,
+          _featherShadeMat,
+          position: vm.Vector3(x, -0.35, 0.05),
+          scale: vm.Vector3(0.75, 0.16, 0.18),
+        ),
+      );
+    }
+    _farWing.add(
+      _node(
+        _sphere,
+        _featherShadeMat,
+        position: vm.Vector3(-1.0, 0, 0),
+        scale: vm.Vector3(1.9, 1.0, 0.33),
       ),
     );
     _farWing.add(
       _node(
         _sphere,
         _featherShadeMat,
-        position: vm.Vector3(-0.9, 0, 0),
-        scale: vm.Vector3(1.8, 0.95, 0.3),
+        position: vm.Vector3(-2.0, -0.1, 0.02),
+        scale: vm.Vector3(1.0, 0.58, 0.28),
       ),
     );
 
+    // 围巾
     _scarf = Node()..position = vm.Vector3(2.2, 3.45, 0);
     _torso.add(_scarf);
-    for (var i = 0; i < 3; i++) {
+    _scarf.add(_node(_sphere, _scarfMat, scale: vm.Vector3.all(0.22)));
+    for (var i = 0; i < 4; i++) {
       _scarf.add(
         _box(
-          vm.Vector3(0.9, 0.16, 0.3),
+          vm.Vector3(0.8, 0.14, 0.3),
           _scarfMat,
-          vm.Vector3(-0.5 - i * 0.8, -0.1 - i * 0.08, 0),
+          vm.Vector3(-0.45 - i * 0.72, -0.1 - i * 0.06, i.isEven ? 0.1 : -0.1),
         ),
       );
     }
@@ -616,6 +870,8 @@ class RideScene {
 
     _pedalA.position = pedalNear;
     _pedalB.position = pedalFar;
+    _footA.position = pedalNear + vm.Vector3(0, 0.1, 0);
+    _footB.position = pedalFar + vm.Vector3(0, 0.1, 0);
     _placeRod(_crankArmA, crank, pedalNear, 0.07);
     _placeRod(_crankArmB, crank, pedalFar, 0.07);
 
@@ -659,6 +915,15 @@ class RideScene {
 
     switch (kind) {
       case ObstacleKind.rock:
+        // 深色背壳勾出轮廓
+        root.add(
+          _node(
+            _rock,
+            _outlineMat,
+            position: vm.Vector3(0, height * 0.45, 0.55),
+            scale: vm.Vector3(width * 0.6, height * 0.55, 0.9),
+          ),
+        );
         root.add(
           _node(
             _rock,
@@ -675,8 +940,41 @@ class RideScene {
             scale: vm.Vector3(width * 0.24, height * 0.26, 0.55),
           ),
         );
+        root.add(
+          _node(
+            _rock,
+            _rockLightMat,
+            position: vm.Vector3(-width * 0.12, height * 0.7, -0.65),
+            scale: vm.Vector3(width * 0.16, height * 0.14, 0.3),
+          ),
+        );
+        final crack = _box(
+          vm.Vector3(width * 0.42, 0.07, 0.05),
+          _edgeMat,
+          vm.Vector3(0, height * 0.5, -0.96),
+        );
+        crack.rotation = vm.Quaternion.axisAngle(_zAxis, 0.45);
+        root.add(crack);
+        for (final x in <double>[-width * 0.34, width * 0.3]) {
+          root.add(
+            _node(
+              _rock,
+              _rockMat,
+              position: vm.Vector3(x, height * 0.16, -0.55),
+              scale: vm.Vector3(width * 0.12, height * 0.12, 0.35),
+            ),
+          );
+        }
         break;
       case ObstacleKind.crate:
+        // 深色背板 + 正面木框与金属角码
+        root.add(
+          _box(
+            vm.Vector3(width * 1.08, height * 1.08, 0.12),
+            _outlineMat,
+            vm.Vector3(0, height / 2, 0.55),
+          ),
+        );
         root.add(
           _box(
             vm.Vector3(width, height, 1.6),
@@ -684,17 +982,104 @@ class RideScene {
             vm.Vector3(0, height / 2, 0),
           ),
         );
+        const frameZ = -0.82;
+        root.add(
+          _box(
+            vm.Vector3(width * 1.06, 0.16, 0.12),
+            _crateDarkMat,
+            vm.Vector3(0, 0.1, frameZ),
+          ),
+        );
+        root.add(
+          _box(
+            vm.Vector3(width * 1.06, 0.16, 0.12),
+            _crateDarkMat,
+            vm.Vector3(0, height - 0.1, frameZ),
+          ),
+        );
+        root.add(
+          _box(
+            vm.Vector3(0.16, height * 1.04, 0.12),
+            _crateDarkMat,
+            vm.Vector3(-width / 2 + 0.08, height / 2, frameZ),
+          ),
+        );
+        root.add(
+          _box(
+            vm.Vector3(0.16, height * 1.04, 0.12),
+            _crateDarkMat,
+            vm.Vector3(width / 2 - 0.08, height / 2, frameZ),
+          ),
+        );
         for (final sign in <double>[-1, 1]) {
           final bar = _box(
-            vm.Vector3(width * 1.18, 0.16, 0.12),
+            vm.Vector3(width * 1.12, 0.2, 0.12),
             _crateDarkMat,
-            vm.Vector3(0, height / 2, 0.83),
+            vm.Vector3(0, height / 2, frameZ - 0.02),
           );
           bar.rotation = vm.Quaternion.axisAngle(_zAxis, sign * math.pi / 4);
           root.add(bar);
         }
+        final highlight = _box(
+          vm.Vector3(width * 1.02, 0.06, 0.13),
+          _edgeMat,
+          vm.Vector3(0, height / 2, frameZ - 0.06),
+        );
+        highlight.rotation = vm.Quaternion.axisAngle(_zAxis, math.pi / 4);
+        root.add(highlight);
+        for (final y in <double>[height * 0.34, height * 0.67]) {
+          root.add(
+            _box(
+              vm.Vector3(width * 0.96, 0.07, 0.1),
+              _crateDarkMat,
+              vm.Vector3(0, y, frameZ - 0.01),
+            ),
+          );
+        }
+        for (final x in <double>[-width / 2, width / 2]) {
+          for (final y in <double>[0.25, height - 0.25]) {
+            root.add(
+              _box(
+                vm.Vector3(0.5, 0.5, 0.13),
+                _metalMat,
+                vm.Vector3(x, y, frameZ - 0.04),
+              ),
+            );
+          }
+        }
+        root.add(
+          _box(
+            vm.Vector3(width * 1.02, 0.08, 0.14),
+            _edgeMat,
+            vm.Vector3(0, height + 0.02, frameZ + 0.02),
+          ),
+        );
+        root.add(
+          _box(
+            vm.Vector3(1.3, 0.55, 0.08),
+            _edgeMat,
+            vm.Vector3(0, height * 0.55, frameZ - 0.08),
+          ),
+        );
+        root.add(
+          _box(
+            vm.Vector3(1.08, 0.36, 0.09),
+            _crateDarkMat,
+            vm.Vector3(0, height * 0.55, frameZ - 0.13),
+          ),
+        );
         break;
       case ObstacleKind.log:
+        // 深色背壳 + 亮色切面与年轮
+        root.add(
+          _node(
+            _cylinder,
+            _outlineMat,
+            position: vm.Vector3(0, height / 2, 0.3),
+            scale: vm.Vector3(height * 1.08, width * 1.02, height * 1.08),
+            rotation: vm.Quaternion.axisAngle(_zAxis, math.pi / 2),
+          ),
+        );
         root.add(
           _node(
             _cylinder,
@@ -707,16 +1092,78 @@ class RideScene {
         root.add(
           _node(
             _disc,
-            _crateDarkMat,
-            position: vm.Vector3(width / 2, height / 2, 0),
-            scale: vm.Vector3(height, height, 1),
+            _woodLightMat,
+            position: vm.Vector3(width / 2 + 0.02, height / 2, 0),
+            scale: vm.Vector3(height * 0.95, height * 0.95, 1),
             rotation: vm.Quaternion.axisAngle(_zAxis, -math.pi / 2),
+          ),
+        );
+        for (final factor in <double>[0.35, 0.62, 0.82]) {
+          root.add(
+            _node(
+              _thinRing,
+              _crateDarkMat,
+              position: vm.Vector3(width / 2 + 0.04, height / 2, 0),
+              scale: vm.Vector3.all(height * factor),
+              rotation: vm.Quaternion.axisAngle(_zAxis, -math.pi / 2),
+            ),
+          );
+        }
+        root.add(
+          _node(
+            _thinRing,
+            _outlineMat,
+            position: vm.Vector3(width / 2 + 0.03, height / 2, 0),
+            scale: vm.Vector3.all(height * 0.5),
+            rotation: vm.Quaternion.axisAngle(_zAxis, -math.pi / 2),
+          ),
+        );
+        for (final x in <double>[-width * 0.22, width * 0.12]) {
+          root.add(
+            _node(
+              _ring,
+              _crateDarkMat,
+              position: vm.Vector3(x, height / 2, 0),
+              scale: vm.Vector3.all(height * 0.5),
+              rotation: vm.Quaternion.axisAngle(_zAxis, math.pi / 2),
+            ),
+          );
+        }
+        for (final y in <double>[height * 0.3, height * 0.52, height * 0.74]) {
+          root.add(
+            _box(
+              vm.Vector3(width * 0.7, 0.05, 0.06),
+              _crateDarkMat,
+              vm.Vector3(-width * 0.05, y, -height * 0.5),
+            ),
+          );
+        }
+        root.add(
+          _box(
+            vm.Vector3(width * 0.8, 0.06, 0.3),
+            _edgeMat,
+            vm.Vector3(-width * 0.05, height + 0.02, 0),
+          ),
+        );
+        root.add(
+          _coneRod(
+            vm.Vector3(width * 0.18, height * 0.95, -0.1),
+            vm.Vector3(width * 0.3, height * 1.25, -0.2),
+            0.18,
+            _logMat,
           ),
         );
         break;
       case ObstacleKind.banner:
         final clearance = SceneUnits.bannerClearance(kind);
         final poleTop = clearance + height + 1.6;
+        root.add(
+          _box(
+            vm.Vector3(width * 1.05, height * 1.08, 0.1),
+            _outlineMat,
+            vm.Vector3(0, clearance + height / 2, 0.42),
+          ),
+        );
         root.add(
           _rod(
             vm.Vector3(-width / 2, 0, 0),
@@ -733,6 +1180,18 @@ class RideScene {
             _bannerPoleMat,
           ),
         );
+        for (final x in <double>[-width / 2, width / 2]) {
+          for (final y in <double>[0.5, poleTop - 0.4]) {
+            root.add(
+              _node(
+                _ring,
+                _metalMat,
+                position: vm.Vector3(x, y, 0),
+                scale: vm.Vector3.all(0.22),
+              ),
+            );
+          }
+        }
         root.add(
           _box(
             vm.Vector3(width, height, 0.7),
@@ -740,16 +1199,77 @@ class RideScene {
             vm.Vector3(0, clearance + height / 2, 0),
           ),
         );
-        for (var i = 0; i < 3; i++) {
+        const bannerZ = -0.38;
+        root.add(
+          _box(
+            vm.Vector3(width * 1.02, 0.14, 0.1),
+            _edgeMat,
+            vm.Vector3(0, clearance + 0.07, bannerZ),
+          ),
+        );
+        root.add(
+          _box(
+            vm.Vector3(width * 1.02, 0.14, 0.1),
+            _edgeMat,
+            vm.Vector3(0, clearance + height - 0.07, bannerZ),
+          ),
+        );
+        root.add(
+          _box(
+            vm.Vector3(0.14, height * 0.94, 0.1),
+            _edgeMat,
+            vm.Vector3(-width / 2 + 0.07, clearance + height / 2, bannerZ),
+          ),
+        );
+        root.add(
+          _box(
+            vm.Vector3(0.14, height * 0.94, 0.1),
+            _edgeMat,
+            vm.Vector3(width / 2 - 0.07, clearance + height / 2, bannerZ),
+          ),
+        );
+        for (var i = 0; i < 4; i++) {
           root.add(
             _box(
-              vm.Vector3(0.7, height * 0.55, 0.1),
+              vm.Vector3(0.55, height * 0.58, 0.1),
               _whiteMat,
               vm.Vector3(
-                -width / 2 + width * (0.2 + i * 0.3),
+                -width / 2 + width * (0.16 + i * 0.22),
                 clearance + height / 2,
-                0.41,
+                bannerZ - 0.02,
               ),
+            ),
+          );
+        }
+        final diamond = _box(
+          vm.Vector3(0.85, 0.85, 0.1),
+          _edgeMat,
+          vm.Vector3(0, clearance + height / 2, bannerZ - 0.05),
+        );
+        diamond.rotation = vm.Quaternion.axisAngle(_zAxis, math.pi / 4);
+        root.add(diamond);
+        root.add(
+          _rod(
+            vm.Vector3(-width / 2, poleTop, 0),
+            vm.Vector3(width / 2, poleTop, 0),
+            0.03,
+            _bannerPoleMat,
+          ),
+        );
+        for (final x in <double>[-width / 2, width / 2]) {
+          root.add(
+            _node(
+              _sphere,
+              _edgeMat,
+              position: vm.Vector3(x, poleTop + 0.06, 0),
+              scale: vm.Vector3.all(0.18),
+            ),
+          );
+          root.add(
+            _box(
+              vm.Vector3(0.34, 0.12, 0.34),
+              _outlineMat,
+              vm.Vector3(x, 0.06, 0),
             ),
           );
         }
@@ -759,8 +1279,16 @@ class RideScene {
     root.add(
       _node(
         _disc,
+        _outlineMat,
+        position: vm.Vector3(0, 0.02, 0),
+        scale: vm.Vector3(width * 0.58, 1, 0.8),
+      ),
+    );
+    root.add(
+      _node(
+        _disc,
         _shadowMat,
-        position: vm.Vector3(0, 0.035, 0),
+        position: vm.Vector3(0, 0.04, 0),
         scale: vm.Vector3(width * 0.5, 1, 0.7),
       ),
     );
@@ -932,11 +1460,29 @@ class RideScene {
     return node;
   }
 
-  void _placeRod(Node node, vm.Vector3 a, vm.Vector3 b, double radius) {
+  Node _billRod(
+    vm.Vector3 a,
+    vm.Vector3 b,
+    double radius,
+    double flatten,
+    Material material,
+  ) {
+    final node = _node(_bill, material);
+    _placeRod(node, a, b, radius, flatten: flatten);
+    return node;
+  }
+
+  void _placeRod(
+    Node node,
+    vm.Vector3 a,
+    vm.Vector3 b,
+    double radius, {
+    double flatten = 1.0,
+  }) {
     final delta = b - a;
     final length = math.max(delta.length, 0.001);
     node.position = (a + b) * 0.5;
-    node.scale = vm.Vector3(radius * 2, length, radius * 2);
+    node.scale = vm.Vector3(radius * 2, length, radius * 2 * flatten);
     node.rotation = _fromYTo(delta);
   }
 
