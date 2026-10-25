@@ -22,6 +22,11 @@ class SeaLifeComponent extends SceneLayerComponent {
   /// 跃出水面占一个周期的比例，其余时间潜在水下。
   static const double _jumpPortion = 0.22;
 
+  /// 入水波纹：水花溅开后，两圈波纹错开扩散并淡出（秒）。
+  static const double _rippleSeconds = 0.85;
+  static const double _rippleDelay = 0.12;
+  static const double _rippleStagger = 0.22;
+
   /// 跃鱼所在的水面：靠近海天交界，明显远离近岸沙滩。
   static double get _waterlineY => IsoProjection.seaEdgeY - 66;
 
@@ -31,6 +36,10 @@ class SeaLifeComponent extends SceneLayerComponent {
     ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.5)
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1.2;
+  final Paint _ripplePaint = Paint()
+    ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.4)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.4;
 
   double _elapsed = 0;
 
@@ -59,10 +68,12 @@ class SeaLifeComponent extends SceneLayerComponent {
     final landing = Offset(water.dx + span / 2, water.dy);
 
     if (cycle >= _jumpPortion) {
+      final sinceLanding = (cycle - _jumpPortion) * seed.period;
       final after = (cycle - _jumpPortion) / 0.09;
       if (after < 1) {
         _paintSplash(canvas, landing, 1 - after);
       }
+      _paintRipples(canvas, landing, sinceLanding);
       return;
     }
 
@@ -127,6 +138,27 @@ class SeaLifeComponent extends SceneLayerComponent {
       false,
       _splashPaint,
     );
+  }
+
+  /// 入水后从落点向外扩散的波纹：两圈错开出现，边扩散边淡出。
+  void _paintRipples(Canvas canvas, Offset landing, double sinceLanding) {
+    for (var i = 0; i < 2; i++) {
+      final progress =
+          (sinceLanding - _rippleDelay - _rippleStagger * i) / _rippleSeconds;
+      if (progress <= 0 || progress >= 1) continue;
+      final fade = 1 - progress;
+      _ripplePaint
+        ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.4 * fade)
+        ..strokeWidth = 1.6 - 0.8 * progress;
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: landing + const Offset(0, -1),
+          width: 12 + 40 * progress,
+          height: 3.4 + 8 * progress,
+        ),
+        _ripplePaint,
+      );
+    }
   }
 }
 
