@@ -12,6 +12,7 @@ import '../iso_projection.dart';
 import '../painting/pelican_art.dart';
 import '../painting/prop_art.dart';
 import '../rendering/baked_sprite.dart';
+import '../rendering/rider_sprites.dart';
 import '../ride_style.dart';
 import '../world_layout.dart';
 import 'scene_layer_component.dart';
@@ -19,24 +20,30 @@ import 'scene_layer_component.dart';
 /// 骑行者、障碍与拾取物所在的 2.5D 实体层。
 ///
 /// - 烘焙精灵：道具在加载时烘焙成单张 [BakedSprite]，每帧只画一次；
-///   骑行者每帧变化，直接现场绘制一层正稿。
+///   骑行者的车轮、曲柄、腿与踏板按角度预烘焙，只现场绘制矢量正稿。
 /// - 3D 装饰器：骑行者套一层 [Rotate3DDecorator]，做轻微的偏航与透视。
 /// - 等距深度排序：按世界 z 由远到近绘制，骑行者插在 z = 0 的位置。
+///   实体只在生成、拾取或磁铁吸附时改变深度，因此排序结果会缓存到
+///   [GameProvider.entityRevision] 变化时才重算。
 class RideEntitiesComponent extends SceneLayerComponent {
   RideEntitiesComponent({required super.provider, super.priority});
 
   static const double _riderScale = 0.78;
+
+  /// 拾取物光晕的位图倍率：1080p 下放大后仍接近 1:1。
+  static const double _glowScale = 3;
 
   final Rotate3DDecorator _riderTilt = Rotate3DDecorator(
     perspective: 0.0011,
   );
   final Paint _shadowPaint = Paint()..color = const Color(0x55202426);
   final Paint _riderShadowPaint = Paint();
-  final Paint _glowPaint = Paint()..filterQuality = FilterQuality.low;
+  final Paint _glowPaint = Paint()..filterQuality = FilterQuality.medium;
 
-  /// 每帧复用同一份列表，避免在渲染循环里反复分配。
+  /// 深度排序结果；只有 [GameProvider.entityRevision] 变化时才重算。
   final List<Obstacle> _sortedObstacles = <Obstacle>[];
   final List<Pickup> _sortedPickups = <Pickup>[];
+  int _orderRevision = -1;
 
   final Map<ObstacleKind, List<BakedSprite>> _obstacleSprites =
       <ObstacleKind, List<BakedSprite>>{};
@@ -49,6 +56,9 @@ class RideEntitiesComponent extends SceneLayerComponent {
   late final Picture _pelicanStand;
   late final Picture _pelicanDuck;
 
+  /// 车轮/曲柄/腿/踏板的 12 档角度缓存，在加载时烘焙，避免首帧卡顿。
+  late final RiderSpriteCache _riderSprites;
+
   double _elapsed = 0;
   double _wheelAngle = 0;
   double _wingPhase = 0;
@@ -58,6 +68,7 @@ class RideEntitiesComponent extends SceneLayerComponent {
     _bikePicture = _recordRiderLayer(paintRiderBikeStatic);
     _pelicanStand = _recordRiderBody(ducking: false);
     _pelicanDuck = _recordRiderBody(ducking: true);
+    _riderSprites = RiderSpriteCache();
     for (final kind in ObstacleKind.values) {
       _obstacleSprites[kind] = <BakedSprite>[
         for (var variant = 0; variant < 2; variant++)
@@ -93,13 +104,13 @@ class RideEntitiesComponent extends SceneLayerComponent {
     );
   }
 
-  /// 拾取物光晕烘焙成 2 倍位图：径向渐变只算一次，之后每帧只做一次采样。
+  /// 拾取物光晕烘焙成 [_glowScale] 倍位图：径向渐变只算一次，
+  /// 之后每帧只做一次采样。
   ui.Image _bakeGlow(PickupKind kind) {
     const logical = 48.0;
-    const scale = 2.0;
     final recorder = PictureRecorder();
     final canvas = Canvas(recorder);
-    canvas.scale(scale);
+    canvas.scale(_glowScale);
     canvas.translate(logical / 2, logical / 2);
     final color = pickupColor(kind);
     canvas.drawCircle(
@@ -117,8 +128,8 @@ class RideEntitiesComponent extends SceneLayerComponent {
     );
     final picture = recorder.endRecording();
     final image = picture.toImageSync(
-      (logical * scale).round(),
-      (logical * scale).round(),
+      (logical * _glowScale).round(),
+      (logical * _glowScale).round(),
     );
     picture.dispose();
     return image;
@@ -137,6 +148,7 @@ class RideEntitiesComponent extends SceneLayerComponent {
     for (final image in _glowImages.values) {
       image.dispose();
     }
+    _riderSprites.dispose();
     _bikePicture.dispose();
     _pelicanStand.dispose();
     _pelicanDuck.dispose();
@@ -157,14 +169,17 @@ class RideEntitiesComponent extends SceneLayerComponent {
   @override
   void render(Canvas canvas) {
     final state = provider.state;
-    _sortedObstacles
-      ..clear()
-      ..addAll(state.obstacles)
-      ..sort((a, b) => b.z.compareTo(a.z));
-    _sortedPickups
-      ..clear()
-      ..addAll(state.pickups)
-      ..sort((a, b) => b.z.compareTo(a.z));
+    if (provider.entityRevision != _orderRevision) {
+      _orderRevision = provider.entityRevision;
+      _sortedObstacles
+        ..clear()
+        ..addAll(state.obstacles)
+        ..sort((a, b) => b.z.compareTo(a.z));
+      _sortedPickups
+        ..clear()
+        ..addAll(state.pickups)
+        ..sort((a, b) => b.z.compareTo(a.z));
+    }
     final obstacles = _sortedObstacles;
     final pickups = _sortedPickups;
 
@@ -300,14 +315,14 @@ class RideEntitiesComponent extends SceneLayerComponent {
       applyRiderArtTransform(tilted, kRiderArtSize);
       // 动态层与静态层交错绘制，保持车轮/曲柄/腿被车身遮住的层次。
       paintRiderSpeedMarks(tilted, look);
-      paintRiderWheels(tilted, look);
+      _riderSprites.drawWheels(tilted, _wheelAngle);
       tilted.drawPicture(_bikePicture);
-      paintRiderCranks(tilted, look);
-      paintRiderLegs(tilted, look);
+      _riderSprites.drawCranks(tilted, _wheelAngle);
+      _riderSprites.drawLegs(tilted, _wheelAngle, ducking: look.ducking);
       tilted.drawPicture(look.ducking ? _pelicanDuck : _pelicanStand);
       paintRiderWing(tilted, look);
       paintRiderScarf(tilted, look);
-      paintRiderPedals(tilted, look);
+      _riderSprites.drawPedals(tilted, _wheelAngle);
       paintRiderEffects(tilted, look);
     }, canvas);
     canvas.restore();

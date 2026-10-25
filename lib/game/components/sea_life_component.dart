@@ -35,6 +35,9 @@ class SeaLifeComponent extends SceneLayerComponent {
 
   double _elapsed = 0;
 
+  /// 波纹进度复用同一份列表：三条鱼逐条绘制，用完即被下一条覆盖。
+  final List<double> _rippleBuffer = <double>[];
+
   @override
   void update(double dt) {
     super.update(dt);
@@ -59,7 +62,11 @@ class SeaLifeComponent extends SceneLayerComponent {
     final takeOff = Offset(water.dx - span / 2, water.dy);
     final landing = Offset(water.dx + span / 2, water.dy);
 
-    final splash = SeaJumpSplash.at(cycle: cycle, period: seed.period);
+    final splash = SeaJumpSplash.at(
+      cycle: cycle,
+      period: seed.period,
+      rippleBuffer: _rippleBuffer,
+    );
 
     if (cycle >= SeaJumpSplash.jumpPortion) {
       // 鱼已经入水，画面只剩落水浪花与向外扩散的波纹。
@@ -192,10 +199,19 @@ class SeaJumpSplash {
   factory SeaJumpSplash.at({
     required double cycle,
     required double period,
+    List<double>? rippleBuffer,
   }) {
     final airborne = cycle < jumpPortion;
     final t = airborne ? cycle / jumpPortion : 1.0;
     final sinceLanding = airborne ? 0.0 : (cycle - jumpPortion) * period;
+    // 复用调用方提供的缓冲区，避免每条鱼每帧都分配一份列表。
+    final ripples = rippleBuffer ?? <double>[];
+    ripples.clear();
+    if (!airborne) {
+      for (var i = 0; i < rippleCount; i++) {
+        ripples.add((sinceLanding - rippleStagger * i) / rippleSeconds);
+      }
+    }
     return SeaJumpSplash._(
       takeOffStrength: airborne && t < takeOffSplashPortion
           ? 1 - t / takeOffSplashPortion
@@ -205,11 +221,7 @@ class SeaJumpSplash {
           : (sinceLanding < splashSeconds
                 ? 1 - sinceLanding / splashSeconds
                 : 0),
-      rippleProgress: <double>[
-        if (!airborne)
-          for (var i = 0; i < rippleCount; i++)
-            (sinceLanding - rippleStagger * i) / rippleSeconds,
-      ],
+      rippleProgress: ripples,
     );
   }
 

@@ -46,7 +46,8 @@ class ParticleBurstComponent extends SceneLayerComponent {
   @override
   void update(double dt) {
     super.update(dt);
-    final friction = math.pow(0.1, dt).toDouble();
+    // 等价于 pow(0.1, dt)，但 exp 比 pow 快，且每帧都要算一次。
+    final friction = math.exp(-math.ln10 * dt);
     for (final particle in _particles) {
       particle.remaining -= dt;
       particle.position = particle.position + particle.velocity * dt;

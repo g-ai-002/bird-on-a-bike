@@ -57,6 +57,19 @@ class GameProvider extends ChangeNotifier {
   double _persistedBest = 0;
   double _persistCooldown = 0;
 
+  /// 实体列表双缓冲：每帧只清空并复用另一份，避免周期性分配列表。
+  final List<Obstacle> _obstacleBufferA = <Obstacle>[];
+  final List<Obstacle> _obstacleBufferB = <Obstacle>[];
+  final List<Pickup> _pickupBufferA = <Pickup>[];
+  final List<Pickup> _pickupBufferB = <Pickup>[];
+
+  int _entityRevision = 0;
+
+  /// 实体集合的版本号：生成、拾取、回收或磁铁吸附改变深度时递增。
+  ///
+  /// 渲染层按深度排序的结果会缓存到这个值变化为止，省掉每帧的排序与拷贝。
+  int get entityRevision => _entityRevision;
+
   /// 进度落盘的最小间隔（秒）。最高速时距离增长约 6 m/s，
   /// 逐帧比较会让写盘退化成每秒一次；节流后只在暂停/结算时补写一次。
   static const double _persistInterval = 15;
@@ -87,6 +100,7 @@ class GameProvider extends ChangeNotifier {
     _duckTimer = 0;
     _notifyAccumulator = 0;
     _persistCooldown = 0;
+    _entityRevision++;
 
     _state = GameState(
       status: GameStatus.playing,
@@ -190,16 +204,31 @@ class GameProvider extends ChangeNotifier {
     final moved = speed * dt;
     final distance = s.distance + moved / WorldLayout.unitsPerMeter;
 
-    // 实体原地推进：每帧只分配两个列表，不再为每个实体复制对象。
-    final obstacles = <Obstacle>[];
+    // 实体原地推进：写入另一份缓冲列表，既不复制实体也不分配列表。
+    var entitiesChanged = false;
+    final obstacles = identical(s.obstacles, _obstacleBufferA)
+        ? _obstacleBufferB
+        : _obstacleBufferA;
+    obstacles.clear();
     for (final obstacle in s.obstacles) {
       obstacle.moveBy(-moved);
-      if (!obstacle.isOffscreen) obstacles.add(obstacle);
+      if (obstacle.isOffscreen) {
+        entitiesChanged = true;
+      } else {
+        obstacles.add(obstacle);
+      }
     }
-    final pickups = <Pickup>[];
+    final pickups = identical(s.pickups, _pickupBufferA)
+        ? _pickupBufferB
+        : _pickupBufferA;
+    pickups.clear();
     for (final pickup in s.pickups) {
       pickup.moveBy(-moved);
-      if (!pickup.isOffscreen) pickups.add(pickup);
+      if (pickup.isOffscreen) {
+        entitiesChanged = true;
+      } else {
+        pickups.add(pickup);
+      }
     }
 
     _nextObstacleIn -= dt;
@@ -217,6 +246,7 @@ class GameProvider extends ChangeNotifier {
         obstacleGapSeconds(_random, s.difficulty),
         kind,
       );
+      entitiesChanged = true;
     }
 
     _nextFishIn -= dt;
@@ -231,6 +261,7 @@ class GameProvider extends ChangeNotifier {
       _nextId += pattern.length;
       pickups.addAll(pattern);
       _nextFishIn = fishGapSeconds(_random);
+      entitiesChanged = true;
     }
 
     _nextPowerUpIn -= dt;
@@ -247,13 +278,16 @@ class GameProvider extends ChangeNotifier {
         ),
       );
       _nextPowerUpIn = powerUpGapSeconds(_random);
+      entitiesChanged = true;
     }
 
     var magnetRemaining = max(0.0, s.magnetRemaining - dt);
     if (magnetRemaining > 0) {
       // 吸附直接改写拾取物坐标，避免每帧再复制一份列表。
       for (final pickup in pickups) {
-        _attract(pickup, rider, dt);
+        if (_attract(pickup, rider, dt)) {
+          entitiesChanged = true;
+        }
       }
     }
 
@@ -274,6 +308,7 @@ class GameProvider extends ChangeNotifier {
       final pickup = pickups[i];
       if (!pickupReached(pickup, rider)) continue;
       pickups.removeAt(i);
+      entitiesChanged = true;
       if (pickup.kind == PickupKind.fish) {
         caughtFish++;
         fish++;
@@ -315,11 +350,14 @@ class GameProvider extends ChangeNotifier {
         }
         LogService.info('护盾抵挡了 ${obstacle.kind.label}');
         obstacles.removeAt(i);
+        entitiesChanged = true;
         continue;
       }
       crashed = true;
       break;
     }
+
+    if (entitiesChanged) _entityRevision++;
 
     final score = distance.floor() + bonusScore;
     final highScore = max(s.highScore, score);
@@ -359,13 +397,14 @@ class GameProvider extends ChangeNotifier {
     }
   }
 
-  void _attract(Pickup pickup, RiderMotion rider, double dt) {
+  /// 把拾取物向骑行者吸附一步；返回是否真的改动了坐标（会改变深度排序）。
+  bool _attract(Pickup pickup, RiderMotion rider, double dt) {
     final dx = WorldLayout.riderX - pickup.x;
     final targetHeight = rider.height + rider.bodyHeight / 2;
     final dy = targetHeight - pickup.y;
     final dz = WorldLayout.riderZ - pickup.z;
     final distance = sqrt(dx * dx + dy * dy + dz * dz);
-    if (distance > AppConstants.magnetRange || distance < 0.1) return;
+    if (distance > AppConstants.magnetRange || distance < 0.1) return false;
 
     final step = min(AppConstants.magnetSpeed * dt, distance);
     pickup.moveBy(
@@ -373,6 +412,7 @@ class GameProvider extends ChangeNotifier {
       dy: pickup.y + dy / distance * step,
       dz: pickup.z + dz / distance * step,
     );
+    return true;
   }
 
   /// 进度落盘：默认 15 秒最多写一次，避免高速骑行时反复写磁盘。
