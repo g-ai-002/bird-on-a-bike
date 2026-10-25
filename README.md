@@ -22,6 +22,8 @@
 - 🎞️ 3D 装饰器：骑行者套 `Rotate3DDecorator`，带轻微偏航与透视
 - 🌅 多层视差：云、远山、海浪、路面与近景草丛按不同倍率滚动
 - 🖼️ 画布铺满：Flame 画布填满整个页面，HUD 按钮与计分悬浮在地图之上
+- 📐 画幅适配：水平方向始终铺满，近方形画布（折叠屏展开）上下留白，不裁短左右可视距离
+- ⚡ 渲染开销：静态图层按设备像素比烘焙，云 / 山脊 / 波光 / 路面装饰按平铺带绘制，暂停与结算停掉主循环
 - 🧭 平台自适应提示：桌面讲键盘按键，移动端讲点击与滑动
 - 🪟 沉浸 HUD：得分 / 距离 / 最高 / 小鱼贴顶显示，半透明悬浮层，开局提示数秒后自动淡出
 - 🌇 强化夕阳：更大的日轮、放射状阳光与海面反光
@@ -55,7 +57,7 @@
 
 ## 下载
 
-最新版本 `v0.6.0` 将通过 GitHub Actions 与 Gitea Actions 自动构建：
+最新版本 `v0.7.0` 将通过 GitHub Actions 与 Gitea Actions 自动构建：
 
 - Android APK（arm64-v8a）
 - Windows ZIP（x86-64）
@@ -69,7 +71,7 @@
 各版本互不覆盖，历史版本长期保留：
 
 - 版本列表：<https://g-ai-002.github.io/bird-on-a-bike/>
-- 当前版本：<https://g-ai-002.github.io/bird-on-a-bike/v0.6.0/>
+- 当前版本：<https://g-ai-002.github.io/bird-on-a-bike/v0.7.0/>
 - 预览版：<https://g-ai-002.github.io/bird-on-a-bike/debug/>
 
 非 tag 触发（手动运行 `Build & Release` 工作流）构建出来的站点会发到 `debug/`
@@ -106,13 +108,14 @@ flutter create --platforms=windows,web --project-name bird_on_a_bike .
 
 ```bash
 flutter run -d chrome
-flutter build web --release --base-href /bird-on-a-bike/v0.6.0/
+flutter build web --release --base-href /bird-on-a-bike/v0.7.0/
 ```
 
 ### 渲染结构
 
 | 图层 | 组件 | 作用 |
 |------|------|------|
+| 留白 | `LetterboxComponent` | 近方形画布上下补天空色与近景墨色 |
 | 远景 | `SkyBackdropComponent` | 渐变天空、落日、云、远山、灯塔与海面 |
 | 路面 | `RoadComponent` | 单向单车道沥青带、沙石路肩、地面箭头、椰树与草丛 |
 | 实体 | `RideEntitiesComponent` | 骑行者、障碍与拾取物，按路面深度排序 |
@@ -137,11 +140,11 @@ flutter test
 - Gitea Actions：Android APK、Windows ZIP，并创建 Gitea Release
 
 ```bash
-git tag v0.6.0
-git push origin v0.6.0
+git tag v0.7.0
+git push origin v0.7.0
 ```
 
-Web 版按 tag 分目录保存在 `gh-pages` 分支（`v0.6.0/`、`v0.5.0/` …），根目录的
+Web 版按 tag 分目录保存在 `gh-pages` 分支（`v0.7.0/`、`v0.6.0/` …），根目录的
 版本索引页由 `.github/pages/index.template.html` 渲染，每次发布都会重新生成版本列表；
 非 tag 运行（手动触发）写入 `debug/` 目录、不碰已有版本，同一时刻只允许一个
 Web 发布任务写 `gh-pages`，避免并发覆盖。
