@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import 'package:bird_on_a_bike/game/painting/pelican_art.dart';
 import 'package:bird_on_a_bike/game/painting/prop_art.dart';
-import 'package:bird_on_a_bike/game/rendering/stacked_sprite.dart';
+import 'package:bird_on_a_bike/game/rendering/baked_sprite.dart';
 import 'package:bird_on_a_bike/models/obstacle.dart';
 import 'package:bird_on_a_bike/models/pickup.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,10 +13,9 @@ void main() {
     final canvas = Canvas(recorder);
 
     for (final kind in ObstacleKind.values) {
-      final sprite = StackedSprite.bake(
+      final sprite = BakedSprite.bake(
         size: PropArt.obstacleSize(kind),
         painter: (inner, size) => PropArt.paintObstacle(inner, size, kind),
-        layers: 3,
       );
       sprite.render(canvas, const Offset(120, 400));
       sprite.render(canvas, const Offset(320, 400), rotation: 0.02);
@@ -24,7 +23,7 @@ void main() {
     }
 
     for (final kind in PickupKind.values) {
-      final sprite = StackedSprite.bake(
+      final sprite = BakedSprite.bake(
         size: PropArt.pickupSize(kind),
         painter: (inner, size) => PropArt.paintPickup(inner, size, kind),
         anchorY: 0.5,
@@ -38,11 +37,7 @@ void main() {
       const RideLook(ducking: true, shield: true),
       const RideLook(airborne: true, magnet: true, wingPhase: 2.4),
     ]) {
-      paintStacked(
-        canvas,
-        size: kRiderArtSize,
-        painter: (inner, size) => paintPelicanRider(inner, size, look),
-      );
+      paintPelicanRider(canvas, kRiderArtSize, look);
     }
 
     final picture = recorder.endRecording();

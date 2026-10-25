@@ -2,12 +2,12 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import '../painting/prop_art.dart';
-import 'stacked_sprite.dart';
+import 'baked_sprite.dart';
 
 /// 沿路植被与碎石的缓存精灵。
 ///
 /// 草丛与碎石按颜色缓存成矢量 [Picture]，任意缩放下都清晰且不再重复
-/// 构建 Path；椰树烘焙成带厚度的 [StackedSprite]。
+/// 构建 Path；椰树烘焙成整张 [BakedSprite]。
 class ScenerySprites {
   ScenerySprites._();
 
@@ -18,18 +18,14 @@ class ScenerySprites {
   static final Map<int, Picture> _grass = <int, Picture>{};
   static final Map<int, Picture> _stones = <int, Picture>{};
 
-  static final List<StackedSprite> _palms = <StackedSprite>[
-    StackedSprite.bake(
+  static final List<BakedSprite> _palms = <BakedSprite>[
+    BakedSprite.bake(
       size: palmSize,
       painter: (canvas, size) => _paintPalm(canvas, size, 1),
-      layers: 3,
-      step: const Offset(-0.9, 1.5),
     ),
-    StackedSprite.bake(
+    BakedSprite.bake(
       size: palmSize,
       painter: (canvas, size) => _paintPalm(canvas, size, -1),
-      layers: 3,
-      step: const Offset(-0.9, 1.5),
     ),
   ];
 
@@ -53,7 +49,7 @@ class ScenerySprites {
     );
   }
 
-  static StackedSprite palm(int variant) => _palms[variant.isEven ? 0 : 1];
+  static BakedSprite palm(int variant) => _palms[variant.isEven ? 0 : 1];
 
   static void drawGrass(
     Canvas canvas,

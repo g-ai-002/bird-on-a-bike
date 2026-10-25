@@ -10,15 +10,15 @@ import '../../models/pickup.dart';
 import '../iso_projection.dart';
 import '../painting/pelican_art.dart';
 import '../painting/prop_art.dart';
-import '../rendering/stacked_sprite.dart';
+import '../rendering/baked_sprite.dart';
 import '../ride_style.dart';
 import '../world_layout.dart';
 import 'scene_layer_component.dart';
 
 /// 骑行者、障碍与拾取物所在的 2.5D 实体层。
 ///
-/// - 精灵堆叠：道具在加载时烘焙成带厚度阴影的 [StackedSprite]；
-///   骑行者每帧变化，用 [paintStacked] 现场叠两层。
+/// - 烘焙精灵：道具在加载时烘焙成单张 [BakedSprite]，每帧只画一次；
+///   骑行者每帧变化，直接现场绘制一层正稿。
 /// - 3D 装饰器：骑行者套一层 [Rotate3DDecorator]，做轻微的偏航与透视。
 /// - 等距深度排序：按世界 z 由远到近绘制，骑行者插在 z = 0 的位置。
 class RideEntitiesComponent extends SceneLayerComponent {
@@ -38,10 +38,10 @@ class RideEntitiesComponent extends SceneLayerComponent {
   final List<Obstacle> _sortedObstacles = <Obstacle>[];
   final List<Pickup> _sortedPickups = <Pickup>[];
 
-  final Map<ObstacleKind, List<StackedSprite>> _obstacleSprites =
-      <ObstacleKind, List<StackedSprite>>{};
-  final Map<PickupKind, StackedSprite> _pickupSprites =
-      <PickupKind, StackedSprite>{};
+  final Map<ObstacleKind, List<BakedSprite>> _obstacleSprites =
+      <ObstacleKind, List<BakedSprite>>{};
+  final Map<PickupKind, BakedSprite> _pickupSprites =
+      <PickupKind, BakedSprite>{};
 
   double _elapsed = 0;
   double _wheelAngle = 0;
@@ -50,23 +50,19 @@ class RideEntitiesComponent extends SceneLayerComponent {
   @override
   void onLoad() {
     for (final kind in ObstacleKind.values) {
-      _obstacleSprites[kind] = <StackedSprite>[
+      _obstacleSprites[kind] = <BakedSprite>[
         for (var variant = 0; variant < 2; variant++)
-          StackedSprite.bake(
+          BakedSprite.bake(
             size: PropArt.obstacleSize(kind),
             painter: (canvas, size) =>
                 PropArt.paintObstacle(canvas, size, kind, variant: variant),
-            layers: kind == ObstacleKind.banner ? 3 : 4,
-            step: const Offset(-0.95, 1.75),
           ),
       ];
     }
     for (final kind in PickupKind.values) {
-      _pickupSprites[kind] = StackedSprite.bake(
+      _pickupSprites[kind] = BakedSprite.bake(
         size: PropArt.pickupSize(kind),
         painter: (canvas, size) => PropArt.paintPickup(canvas, size, kind),
-        layers: 3,
-        step: const Offset(-0.7, 1.3),
         anchorY: 0.5,
       );
     }
@@ -249,13 +245,7 @@ class RideEntitiesComponent extends SceneLayerComponent {
       ..center = Vector2(0, -kRiderArtSize.height * 0.42);
     _riderTilt.applyChain((tilted) {
       tilted.translate(-kRiderArtSize.width / 2, -kRiderArtSize.height);
-      paintStacked(
-        tilted,
-        size: kRiderArtSize,
-        painter: (inner, size) => paintPelicanRider(inner, size, look),
-        layers: 2,
-        step: const Offset(-0.9, 1.6),
-      );
+      paintPelicanRider(tilted, kRiderArtSize, look);
     }, canvas);
     canvas.restore();
   }

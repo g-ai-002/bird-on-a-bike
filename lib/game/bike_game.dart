@@ -30,7 +30,7 @@ import 'world_layout.dart';
 /// 基于 Flame 主循环的 2.5D 海岸骑行游戏。
 ///
 /// 规则、碰撞与计分都在 [GameProvider] 中；画面由远景视差、等距路面、
-/// 精灵堆叠的实体层与屏幕空间特效叠成，不再依赖 Flutter GPU。
+/// 程序化精灵的实体层与屏幕空间特效叠成，不再依赖 Flutter GPU。
 class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
   BikeGame({required this.provider})
       : super(
