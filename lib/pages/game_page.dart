@@ -304,10 +304,10 @@ class _GamePageState extends State<GamePage> {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
           decoration: BoxDecoration(
-            color: colors.surface.withValues(alpha: 0.38),
+            color: colors.surface.withValues(alpha: 0.7),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: colors.outline.withValues(alpha: 0.5),
+              color: colors.outline.withValues(alpha: 0.55),
             ),
           ),
           child: Text(
@@ -328,9 +328,9 @@ class _GamePageState extends State<GamePage> {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: 0.42),
+        color: colors.surface.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.outline.withValues(alpha: 0.4)),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.5)),
       ),
       child: child,
     );
@@ -357,8 +357,8 @@ class _GamePageState extends State<GamePage> {
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: colors.surfaceContainerHighest.withValues(alpha: 0.5),
-        border: Border.all(color: colors.outline.withValues(alpha: 0.45)),
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.7),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.55)),
       ),
       child: IconButton(
         icon: Icon(icon, color: colors.onSurface, size: 22),
@@ -385,9 +385,9 @@ class _EffectChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest.withValues(alpha: 0.5),
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.55)),
+        border: Border.all(color: color.withValues(alpha: 0.65)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
