@@ -16,6 +16,8 @@ import 'components/particle_burst_component.dart';
 import 'components/score_popup_layer.dart';
 import 'components/scene3d_component.dart';
 import 'components/speed_lines_component.dart';
+import 'components/vignette_component.dart';
+import 'components/wheel_spray_component.dart';
 import 'input/ride_input_component.dart';
 import 'ride_style.dart';
 import 'world_layout.dart';
@@ -48,6 +50,7 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
   late final ParticleBurstComponent _particles;
   late final DeathFlashComponent _flash;
   late final ScorePopupLayer _popups;
+  late final WheelSprayComponent _spray;
   late final RideInputComponent _input;
 
   final math.Random _random = math.Random();
@@ -89,6 +92,7 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
     _particles = ParticleBurstComponent(provider: provider, priority: 50);
     _flash = DeathFlashComponent(provider: provider, priority: 60);
     _popups = ScorePopupLayer(color: RideColors.fish);
+    _spray = WheelSprayComponent(provider: provider, priority: 9);
     _input = RideInputComponent(
       onJump: _onJump,
       onDuck: _onDuckSwipe,
@@ -106,6 +110,8 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
 
     await world.addAll(<Component>[
       scene3d,
+      VignetteComponent(priority: 8),
+      _spray,
       _speedLines,
       _particles,
       _flash,
@@ -253,6 +259,7 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
 
   void _resetForNewGame() {
     _particles.clear();
+    _spray.clear();
     _popups.clear();
     _flash.opacity = 0;
     _flashRemaining = 0;
