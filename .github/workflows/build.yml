@@ -253,6 +253,153 @@ jobs:
           retention-days: 1
 
 
+  # ========== 🌐 发布 Flutter Web 到 GitHub Pages ==========
+  build-web:
+    needs: [ metadata, test ]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    name: 🌐 构建 Web 并发布 Pages
+    permissions:
+      contents: write  # ✅ 需要向 gh-pages 分支推送站点
+    timeout-minutes: 30
+    concurrency:
+      group: pages-${{ github.event.repository.name }}
+      cancel-in-progress: false  # ✅ 多个 tag 串行发布，避免同时写 gh-pages
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: 🦋 配置 Flutter 环境
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: 📦 安装依赖
+        run: flutter pub get
+
+      - name: 🌐 生成并汉化 Web 平台文件
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter create --platforms=web --project-name ${{ needs.metadata.outputs.project_name }} .
+
+          app_desc=$(grep '^description:' pubspec.yaml | sed -E 's/^description:[[:space:]]*//')
+          app_title=$(echo "$app_desc" | sed -E 's/[[:space:]]*-.*$//')
+          echo "📌 站点标题: $app_title"
+          echo "📌 站点描述: $app_desc"
+
+          sed -i "s|<title>.*</title>|<title>${app_title}</title>|" web/index.html
+          sed -i "s|<meta name=\"description\" content=\"[^\"]*\">|<meta name=\"description\" content=\"${app_desc}\">|" web/index.html
+          sed -i "s|<meta name=\"apple-mobile-web-app-title\" content=\"[^\"]*\">|<meta name=\"apple-mobile-web-app-title\" content=\"${app_title}\">|" web/index.html
+          sed -i "s|<meta name=\"theme-color\" content=\"[^\"]*\">|<meta name=\"theme-color\" content=\"#0E7C86\">|" web/index.html
+
+          jq --arg name "$app_title" --arg desc "$app_desc" \
+            '.name = $name | .short_name = $name | .description = $desc | .theme_color = "#0E7C86" | .background_color = "#0B2A2E"' \
+            web/manifest.json > web/manifest.json.tmp
+          mv web/manifest.json.tmp web/manifest.json
+
+          echo "--- 📄 web/manifest.json ---"
+          cat web/manifest.json
+
+      - name: 🔨 构建 Web 产物
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_path="v${{ needs.metadata.outputs.app_version }}"
+          flutter build web --release --base-href "/${{ env.APP_NAME }}/${version_path}/"
+          du -sh build/web
+
+      - name: 📚 检出 gh-pages 站点分支
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if ! git ls-remote --exit-code --heads origin gh-pages > /dev/null 2>&1; then
+            echo "ℹ️ gh-pages 分支不存在，用空孤儿提交初始化"
+            empty_tree=$(git mktree < /dev/null)
+            init_commit=$(git commit-tree "$empty_tree" -m "🌐 初始化 GitHub Pages")
+            git push origin "$init_commit:refs/heads/gh-pages"
+          fi
+
+          git fetch --no-tags --depth=1 origin gh-pages:refs/remotes/origin/gh-pages
+          git worktree add --detach pages refs/remotes/origin/gh-pages
+          echo "📂 站点现有版本目录："
+          find pages -maxdepth 1 -mindepth 1 -type d -name 'v*' -printf '  📁 %f\n' | sort -V || true
+
+      - name: 🗂️ 写入版本目录（保留历史版本）
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_path="v${{ needs.metadata.outputs.app_version }}"
+          rm -rf "pages/${version_path}"
+          mkdir -p "pages/${version_path}"
+          cp -a build/web/. "pages/${version_path}/"
+          touch pages/.nojekyll
+          echo "✅ 已写入 pages/${version_path}"
+          du -sh "pages/${version_path}"
+
+      - name: 🏠 生成版本索引页
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t versions < <(find pages -maxdepth 1 -mindepth 1 -type d -name 'v*' -printf '%f\n' | sort -V -r)
+          if [ "${#versions[@]}" -eq 0 ]; then
+            echo "❌ 未找到任何版本目录"
+            exit 1
+          fi
+          latest="${versions[0]}"
+          app_title=$(grep '^description:' pubspec.yaml | sed -E 's/^description:[[:space:]]*//; s/[[:space:]]*-.*$//')
+          now=$(date -u '+%Y-%m-%d %H:%M UTC')
+          echo "📌 共 ${#versions[@]} 个版本，最新 ${latest}"
+
+          : > /tmp/version-items.html
+          for i in "${!versions[@]}"; do
+            v="${versions[$i]}"
+            badge=""
+            if [ "$i" -eq 0 ]; then badge='<span class="badge">最新</span>'; fi
+            printf '      <a class="card" href="./%s/"><span class="ver">%s%s</span><span class="go">进入试玩 →</span></a>\n' \
+              "$v" "$v" "$badge" >> /tmp/version-items.html
+          done
+
+          awk -v title="$app_title" -v repo="${{ github.repository }}" -v updated="$now" -v items="/tmp/version-items.html" '
+            /__VERSIONS__/ {
+              while ((getline line < items) > 0) print line;
+              close(items);
+              next
+            }
+            { gsub(/__TITLE__/, title); gsub(/__REPO__/, repo); gsub(/__UPDATED__/, updated); print }
+          ' .github/pages/index.template.html > pages/index.html
+
+          printf '%s\n' "${versions[@]}" \
+            | jq -R . \
+            | jq -s --arg latest "$latest" 'map({version: ., url: ("./" + . + "/"), latest: (. == $latest)})' \
+            > pages/versions.json
+
+          echo "--- 📄 versions.json ---"
+          cat pages/versions.json
+
+      - name: 🚀 提交并推送站点
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_path="v${{ needs.metadata.outputs.app_version }}"
+          cd pages
+          git add -A
+          if git diff --cached --quiet; then
+            echo "ℹ️ 站点内容无变化，跳过提交"
+            exit 0
+          fi
+          git commit -q -m "🌐 发布 Web 版本 ${version_path}"
+          git push origin HEAD:refs/heads/gh-pages
+          echo "✅ 已推送到 gh-pages"
+          echo "🔗 https://${{ github.repository_owner }}.github.io/${{ env.APP_NAME }}/${version_path}/"
+
   # ========== 🚀 发布到 GitHub Releases ==========
   release:
     needs: [ build-android, build-windows ]
