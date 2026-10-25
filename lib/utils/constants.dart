@@ -55,7 +55,7 @@ class AppConstants {
   static const double depthSpread = 1.2;
 
   /// 越过骑行者之后的回收线。
-  static const double cullX = -8;
+  static const double cullX = -30;
 
   /// 单次运行最多同时存在的实体数量，防止异常情况下无限增长。
   static const int maxObstacles = 12;

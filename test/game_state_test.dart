@@ -96,8 +96,12 @@ void main() {
       expect(moved.centerX, 5 + ObstacleKind.rock.width / 2);
       expect(moved.right, 5 + ObstacleKind.rock.width);
       expect(
-        const Obstacle(id: 2, kind: ObstacleKind.rock, x: -20).isOffscreen,
+        const Obstacle(id: 2, kind: ObstacleKind.rock, x: -40).isOffscreen,
         isTrue,
+      );
+      expect(
+        const Obstacle(id: 3, kind: ObstacleKind.rock, x: -20).isOffscreen,
+        isFalse,
       );
     });
 
