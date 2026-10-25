@@ -18,6 +18,9 @@ class LogService {
   bool _initialized = false;
   DateTime Function() _now = DateTime.now;
 
+  /// 串行化落盘队列：调用方不等待，UI 线程不再做同步文件写入。
+  Future<void> _pendingWrite = Future<void>.value();
+
   static const int _maxBufferLines = 2000;
   static const int _maxEarlyLines = 500;
   static const int _maxFileSize = 5 * 1024 * 1024;
@@ -118,11 +121,29 @@ class LogService {
   }
 
   void _appendLine(String line) {
+    // 先在当前时刻决定落到哪个文件（跨天与轮转判定依赖此刻时间），
+    // 再把真正的写盘排进异步队列，避免在 UI 线程做同步文件写入。
+    File? target;
     try {
       _refreshLogFile();
-      _logFile?.writeAsStringSync('$line\n', mode: FileMode.append);
+      target = _logFile;
+    } catch (_) {
+      target = null;
+    }
+    if (target == null) return;
+    final file = target;
+    _pendingWrite = _pendingWrite.then((_) => _writeLine(file, line));
+  }
+
+  Future<void> _writeLine(File file, String line) async {
+    try {
+      await file.writeAsString('$line\n', mode: FileMode.append);
     } catch (_) {}
   }
+
+  /// 等待已排队的日志全部写入磁盘（测试与退出前收尾使用）。
+  static Future<void> flush() =>
+      _instance?._pendingWrite ?? Future<void>.value();
 
   /// 写文件前检查：跨天切换新文件、单文件超限轮转。失败静默（内存缓冲仍保留日志）。
   void _refreshLogFile() {

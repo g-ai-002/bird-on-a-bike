@@ -51,6 +51,7 @@ void main() {
   test('日志写入当日文件', () async {
     await LogService.init(logRoot: () async => tempDir);
     LogService.info('落盘条目');
+    await LogService.flush();
     final path = LogService.logFilePath;
     expect(path, isNotEmpty);
     expect(await File(path).readAsString(), contains('落盘条目'));
@@ -59,6 +60,7 @@ void main() {
   test('初始化前的日志进入早期缓冲并在初始化后补写', () async {
     LogService.info('早期日志');
     await LogService.init(logRoot: () async => tempDir);
+    await LogService.flush();
     final path = LogService.logFilePath;
     expect(path, isNotEmpty);
     expect(await File(path).readAsString(), contains('早期日志'));
@@ -77,6 +79,7 @@ void main() {
     LogService.info('第一天日志');
     fakeNow = DateTime(2026, 10, 23, 0, 0, 1);
     LogService.info('第二天日志');
+    await LogService.flush();
 
     final day1 =
         File('${tempDir.path}${Platform.pathSeparator}app_20261022.log');
@@ -94,6 +97,7 @@ void main() {
     expect(path, isNotEmpty);
     await File(path).writeAsString('x' * (5 * 1024 * 1024 + 1024));
     LogService.info('触发轮转');
+    await LogService.flush();
 
     final names =
         await tempDir.list().map((e) => e.uri.pathSegments.last).toList();
