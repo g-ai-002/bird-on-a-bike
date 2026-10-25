@@ -54,6 +54,14 @@
   - [x] 删除 `scene3d/`、`Scene3DComponent` 与 GPU 不支持提示页
   - [x] 移除 flutter_scene / vector_math 依赖与 Android、Windows、CI 的 GPU 开关
   - [x] 补充等距投影单元测试与 README 渲染结构说明
+  - [x] 修正车轮与脚踏旋转方向，与向右前进一致
+  - [x] 胎圈改为固定内外半径的实心圆环，缩放后保持正圆
+  - [x] 加强夕阳：更大日轮、放射光、海面反光与暖色地平线
+  - [x] 回收线后移到 `cullX = -48`，障碍完全离开画面才移除
+  - [x] 画布铺满整页 + cover 相机，HUD 全部悬浮在地图之上
+  - [x] 全屏手势层：点击 / 上滑跳跃、下滑俯身，参考 flutter-snake
+  - [x] 放大鹈鹕嘴与喉囊，增加嘴缝与鼻孔细节
+  - [x] 静态天空 / 海面 / 路面烘焙为 Picture，渐变与沿路精灵复用缓存
   - [x] 版本号 0.4.0 → 0.5.0
   - [x] 更新 README / plan / versions
 
