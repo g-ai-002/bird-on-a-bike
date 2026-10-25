@@ -1,7 +1,6 @@
-import 'dart:io';
+import 'dart:async';
 
 import 'package:flame/game.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -14,10 +13,10 @@ import '../game/ride_style.dart';
 import '../models/game_state.dart';
 import '../providers/game_provider.dart';
 import '../providers/settings_provider.dart';
+import '../utils/ride_hints.dart';
 
 /// 桌面端使用键盘与窗口；手机、平板进入游玩页后锁定横屏并沉浸全屏。
-bool get _isMobile =>
-    !Platform.isWindows && !Platform.isMacOS && !Platform.isLinux;
+bool get _isMobile => !isDesktopPlatform;
 
 /// 游玩页：Flame 画布铺满整个页面，计分与按钮以悬浮 HUD 叠在其上。
 class GamePage extends StatefulWidget {
@@ -33,6 +32,10 @@ class _GamePageState extends State<GamePage> {
     skipTraversal: true,
   );
   BikeGame? _game;
+  GameProvider? _provider;
+  Timer? _hintTimer;
+  bool _showHint = false;
+  GameStatus _lastStatus = GameStatus.idle;
 
   @override
   void initState() {
@@ -58,6 +61,9 @@ class _GamePageState extends State<GamePage> {
     final provider = context.read<GameProvider>();
     final settings = context.read<SettingsProvider>();
     provider.setDifficulty(settings.difficulty);
+    _provider = provider;
+    _lastStatus = provider.state.status;
+    provider.addListener(_handleGameState);
     _game = BikeGame(provider: provider);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -69,6 +75,8 @@ class _GamePageState extends State<GamePage> {
 
   @override
   void dispose() {
+    _provider?.removeListener(_handleGameState);
+    _hintTimer?.cancel();
     if (_isMobile) {
       SystemChrome.setPreferredOrientations([
         DeviceOrientation.landscapeLeft,
@@ -82,6 +90,29 @@ class _GamePageState extends State<GamePage> {
     }
     _gameFocusNode.dispose();
     super.dispose();
+  }
+
+  /// 只在进入新一局时短暂展示玩法提示，避免一直占用画面。
+  void _handleGameState() {
+    final provider = _provider;
+    if (provider == null || !mounted) return;
+    final status = provider.state.status;
+    final previous = _lastStatus;
+    if (status == previous) return;
+    _lastStatus = status;
+    if (status == GameStatus.playing &&
+        (previous == GameStatus.idle || previous == GameStatus.over)) {
+      _showHintFor(const Duration(seconds: 6));
+    }
+  }
+
+  void _showHintFor(Duration duration) {
+    _hintTimer?.cancel();
+    setState(() => _showHint = true);
+    _hintTimer = Timer(duration, () {
+      if (!mounted) return;
+      setState(() => _showHint = false);
+    });
   }
 
   void _focusGame() {
@@ -108,7 +139,7 @@ class _GamePageState extends State<GamePage> {
               child: _buildGameWidget(game),
             ),
           ),
-          Positioned.fill(child: _buildHud(game)),
+          Positioned.fill(child: _buildHud()),
         ],
       ),
     );
@@ -140,29 +171,25 @@ class _GamePageState extends State<GamePage> {
     );
   }
 
-  Widget _buildHud(BikeGame game) {
+  Widget _buildHud() {
     final colors = Theme.of(context).colorScheme;
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
         child: Column(
           children: [
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _circleNavButton(
-                      Icons.arrow_back,
-                      () => Navigator.pop(context),
-                    ),
-                    const SizedBox(height: 8),
-                    IgnorePointer(child: _buildStats(colors)),
-                  ],
+                _circleNavButton(
+                  Icons.arrow_back,
+                  () => Navigator.pop(context),
                 ),
-                const Spacer(),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: IgnorePointer(child: _buildStats(colors)),
+                ),
+                const SizedBox(width: 8),
                 Consumer<GameProvider>(
                   builder: (context, game, _) {
                     final state = game.state;
@@ -215,7 +242,14 @@ class _GamePageState extends State<GamePage> {
               ],
             ),
             const Spacer(),
-            IgnorePointer(child: _buildHint(game)),
+            IgnorePointer(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 320),
+                child: _showHint
+                    ? _buildHint()
+                    : const SizedBox.shrink(),
+              ),
+            ),
           ],
         ),
       ),
@@ -226,32 +260,40 @@ class _GamePageState extends State<GamePage> {
     return Consumer<GameProvider>(
       builder: (context, game, _) {
         final state = game.state;
-        return _hudPanel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _hudText('得分 ${state.score}', color: colors.primary),
-              _hudText('距离 ${state.distance.floor()} m'),
-              _hudText(
-                '最高 ${state.highScore}',
-                color: colors.onSurfaceVariant,
-                fontSize: 12,
-              ),
-              _hudText(
-                '小鱼 ${state.fish}',
-                color: colors.onSurfaceVariant,
-              ),
-              if (state.combo > 1)
-                _hudText('连击 ×${state.combo}', color: colors.secondary),
-            ],
+        return Align(
+          alignment: Alignment.topLeft,
+          child: _hudPanel(
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 2,
+              children: [
+                _hudText(
+                  '得分 ${state.score}',
+                  color: colors.primary,
+                  fontSize: 15,
+                ),
+                _hudText('距离 ${state.distance.floor()} m'),
+                _hudText(
+                  '最高 ${state.highScore}',
+                  color: colors.onSurfaceVariant,
+                  fontSize: 12,
+                ),
+                _hudText(
+                  '小鱼 ${state.fish}',
+                  color: colors.onSurfaceVariant,
+                ),
+                if (state.combo > 1)
+                  _hudText('连击 ×${state.combo}', color: colors.secondary),
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildHint(BikeGame game) {
+  Widget _buildHint() {
     return Consumer<GameProvider>(
       builder: (context, game, _) {
         final status = game.state.status;
@@ -260,16 +302,16 @@ class _GamePageState extends State<GamePage> {
         }
         final colors = Theme.of(context).colorScheme;
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
           decoration: BoxDecoration(
-            color: colors.surface.withValues(alpha: 0.82),
+            color: colors.surface.withValues(alpha: 0.38),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: colors.outline),
+            border: Border.all(
+              color: colors.outline.withValues(alpha: 0.5),
+            ),
           ),
           child: Text(
-            defaultTargetPlatform == TargetPlatform.windows
-                ? '空格 / ↑ 跳跃（可二段跳）· 长按跳更高 · ↓ 俯身 · P 暂停'
-                : '点击 / 上滑跳跃 · 下滑俯身 · 右上角暂停',
+            RideHints.inGame,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: colors.onSurfaceVariant,
@@ -286,9 +328,9 @@ class _GamePageState extends State<GamePage> {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: 0.84),
+        color: colors.surface.withValues(alpha: 0.42),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.outline),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.4)),
       ),
       child: child,
     );
@@ -300,15 +342,12 @@ class _GamePageState extends State<GamePage> {
     double fontSize = 14,
   }) {
     final colors = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color ?? colors.onSurface,
-          fontSize: fontSize,
-          fontWeight: FontWeight.w600,
-        ),
+    return Text(
+      text,
+      style: TextStyle(
+        color: color ?? colors.onSurface,
+        fontSize: fontSize,
+        fontWeight: FontWeight.w600,
       ),
     );
   }
@@ -318,8 +357,8 @@ class _GamePageState extends State<GamePage> {
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: colors.surfaceContainerHighest.withValues(alpha: 0.9),
-        border: Border.all(color: colors.outline),
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.5),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.45)),
       ),
       child: IconButton(
         icon: Icon(icon, color: colors.onSurface, size: 22),
@@ -346,9 +385,9 @@ class _EffectChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest.withValues(alpha: 0.9),
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.6)),
+        border: Border.all(color: color.withValues(alpha: 0.55)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

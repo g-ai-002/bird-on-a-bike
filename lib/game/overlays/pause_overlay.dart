@@ -19,7 +19,7 @@ class PauseOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox.expand(
       child: ColoredBox(
-        color: Colors.black.withValues(alpha: 0.48),
+        color: Colors.black.withValues(alpha: 0.32),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,

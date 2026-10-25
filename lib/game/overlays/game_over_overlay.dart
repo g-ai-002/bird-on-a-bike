@@ -24,7 +24,7 @@ class GameOverOverlay extends StatelessWidget {
 
     return SizedBox.expand(
       child: ColoredBox(
-        color: Colors.black.withValues(alpha: 0.55),
+        color: Colors.black.withValues(alpha: 0.38),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final minHeight =
