@@ -14,12 +14,12 @@ import '../game/ride_style.dart';
 import '../models/game_state.dart';
 import '../providers/game_provider.dart';
 import '../providers/settings_provider.dart';
-import '../utils/constants.dart';
 
 /// 桌面端使用键盘与窗口；手机、平板进入游玩页后锁定横屏并沉浸全屏。
 bool get _isMobile =>
     !Platform.isWindows && !Platform.isMacOS && !Platform.isLinux;
 
+/// 游玩页：Flame 画布铺满整个页面，计分与按钮以悬浮 HUD 叠在其上。
 class GamePage extends StatefulWidget {
   const GamePage({super.key});
 
@@ -96,7 +96,22 @@ class _GamePageState extends State<GamePage> {
     if (game == null) {
       return const SizedBox.shrink();
     }
-    return _isMobile ? _buildImmersive(game) : _buildDesktop(game);
+    return Scaffold(
+      backgroundColor: RideColors.skyTop,
+      body: Stack(
+        children: [
+          // 画布铺满整页；相机按 cover 缩放，四周只会裁切、不会留黑边。
+          Positioned.fill(
+            child: Listener(
+              behavior: HitTestBehavior.opaque,
+              onPointerDown: (_) => _focusGame(),
+              child: _buildGameWidget(game),
+            ),
+          ),
+          Positioned.fill(child: _buildHud(game)),
+        ],
+      ),
+    );
   }
 
   Widget _buildGameWidget(BikeGame game) {
@@ -125,345 +140,144 @@ class _GamePageState extends State<GamePage> {
     );
   }
 
-  Widget _buildDesktop(BikeGame game) {
+  Widget _buildHud(BikeGame game) {
     final colors = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Consumer<GameProvider>(
-          builder: (context, game, _) => Text('得分 ${game.state.score}'),
-        ),
-        actions: [
-          Consumer<GameProvider>(
-            builder: (context, game, _) {
-              if (!game.isPlaying && !game.isPaused) {
-                return const SizedBox.shrink();
-              }
-              return IconButton(
-                icon: Icon(game.isPaused ? Icons.play_arrow : Icons.pause),
-                tooltip: game.isPaused ? '继续' : '暂停',
-                onPressed: game.togglePause,
-              );
-            },
-          ),
-        ],
-      ),
-      body: SafeArea(
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
         child: Column(
           children: [
-            const SizedBox(height: 6),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Consumer<GameProvider>(
-                builder: (context, game, _) {
-                  final state = game.state;
-                  return Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 12,
-                    runSpacing: 4,
-                    children: [
-                      Text(
-                        '距离 ${state.distance.floor()} m',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: colors.primary,
-                            ),
-                      ),
-                      Text(
-                        '最高 ${state.highScore}',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: colors.secondary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                      Text(
-                        '小鱼 ${state.fish}',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: colors.onSurfaceVariant,
-                            ),
-                      ),
-                      if (state.combo > 1)
-                        Text(
-                          '连击 ×${state.combo}',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: RideColors.fish,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _circleNavButton(
+                      Icons.arrow_back,
+                      () => Navigator.pop(context),
+                    ),
+                    const SizedBox(height: 8),
+                    IgnorePointer(child: _buildStats(colors)),
+                  ],
+                ),
+                const Spacer(),
+                Consumer<GameProvider>(
+                  builder: (context, game, _) {
+                    final state = game.state;
+                    final chips = <Widget>[
+                      if (state.hasShield)
+                        _EffectChip(
+                          icon: Icons.shield_outlined,
+                          label: '护盾 ×${state.shieldCharges}',
+                          color: RideColors.shield,
                         ),
-                    ],
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 6),
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: Listener(
-                      onPointerDown: (_) => _focusGame(),
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: AspectRatio(
-                            aspectRatio: 16 / 9,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: _buildGameWidget(game),
+                      if (state.magnetActive)
+                        _EffectChip(
+                          icon: Icons.attractions,
+                          label: '磁铁 ${state.magnetRemaining.ceil()}s',
+                          color: RideColors.magnet,
+                        ),
+                    ];
+                    final showPause = game.isPlaying || game.isPaused;
+                    if (!showPause && chips.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (showPause)
+                          _circleNavButton(
+                            game.isPaused ? Icons.play_arrow : Icons.pause,
+                            game.togglePause,
+                          ),
+                        if (chips.isNotEmpty) const SizedBox(height: 8),
+                        if (chips.isNotEmpty)
+                          IgnorePointer(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                for (final chip in chips)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: chip,
+                                  ),
+                              ],
                             ),
                           ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 8,
-                    left: 16,
-                    right: 16,
-                    child: IgnorePointer(
-                      child: Consumer<GameProvider>(
-                        builder: (context, game, _) {
-                          final state = game.state;
-                          final chips = <Widget>[
-                            if (state.hasShield)
-                              _EffectChip(
-                                icon: Icons.shield_outlined,
-                                label: '护盾 ×${state.shieldCharges}',
-                                color: RideColors.shield,
-                              ),
-                            if (state.magnetActive)
-                              _EffectChip(
-                                icon: Icons.attractions,
-                                label:
-                                    '磁铁 ${state.magnetRemaining.ceil()}s',
-                                color: RideColors.magnet,
-                              ),
-                          ];
-                          if (chips.isEmpty) {
-                            return const SizedBox.shrink();
-                          }
-                          return Align(
-                            alignment: Alignment.topCenter,
-                            child: Wrap(
-                              spacing: 8,
-                              runSpacing: 6,
-                              alignment: WrapAlignment.center,
-                              children: chips,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 6),
-            SizedBox(
-              height: 52,
-              child: Consumer<GameProvider>(
-                builder: (context, game, _) {
-                  final status = game.state.status;
-                  if (status == GameStatus.playing ||
-                      status == GameStatus.paused) {
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          defaultTargetPlatform == TargetPlatform.windows
-                              ? '空格 / ↑ 跳跃（可二段跳）· 长按跳更高 · ↓ 俯身 · P 暂停'
-                              : '点击跳跃（可二段跳）· 下滑俯身 · 点击右上角暂停',
-                          textAlign: TextAlign.center,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: colors.onSurfaceVariant,
-                                  ),
-                        ),
-                      ),
+                      ],
                     );
-                  }
-                  if (status == GameStatus.idle) {
-                    return Center(
-                      child: ElevatedButton.icon(
-                        onPressed: game.start,
-                        icon: const Icon(Icons.replay),
-                        label: const Text('重新开始'),
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(180, 44),
-                        ),
-                      ),
-                    );
-                  }
-                  return const SizedBox.shrink();
-                },
-              ),
+                  },
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
+            const Spacer(),
+            IgnorePointer(child: _buildHint(game)),
           ],
         ),
       ),
     );
   }
 
-  /// 手机横屏全屏布局：画布按 16:9 居中，状态与按钮浮在顶部两角。
-  Widget _buildImmersive(BikeGame game) {
-    final colors = Theme.of(context).colorScheme;
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Listener(
-              onPointerDown: (_) => _focusGame(),
-              child: Center(
-                child: AspectRatio(
-                  aspectRatio:
-                      AppConstants.worldWidth / AppConstants.worldHeight,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: _buildGameWidget(game),
-                  ),
-                ),
+  Widget _buildStats(ColorScheme colors) {
+    return Consumer<GameProvider>(
+      builder: (context, game, _) {
+        final state = game.state;
+        return _hudPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _hudText('得分 ${state.score}', color: colors.primary),
+              _hudText('距离 ${state.distance.floor()} m'),
+              _hudText(
+                '最高 ${state.highScore}',
+                color: colors.onSurfaceVariant,
+                fontSize: 12,
               ),
+              _hudText(
+                '小鱼 ${state.fish}',
+                color: colors.onSurfaceVariant,
+              ),
+              if (state.combo > 1)
+                _hudText('连击 ×${state.combo}', color: colors.secondary),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHint(BikeGame game) {
+    return Consumer<GameProvider>(
+      builder: (context, game, _) {
+        final status = game.state.status;
+        if (status != GameStatus.playing && status != GameStatus.paused) {
+          return const SizedBox.shrink();
+        }
+        final colors = Theme.of(context).colorScheme;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: colors.surface.withValues(alpha: 0.82),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: colors.outline),
+          ),
+          child: Text(
+            defaultTargetPlatform == TargetPlatform.windows
+                ? '空格 / ↑ 跳跃（可二段跳）· 长按跳更高 · ↓ 俯身 · P 暂停'
+                : '点击 / 上滑跳跃 · 下滑俯身 · 右上角暂停',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: colors.onSurfaceVariant,
+              fontSize: 11,
             ),
           ),
-          Positioned.fill(
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Consumer<GameProvider>(
-                      builder: (context, game, _) {
-                        final state = game.state;
-                        return _hudPanel(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _circleNavButton(
-                                Icons.arrow_back,
-                                () => Navigator.pop(context),
-                              ),
-                              const SizedBox(height: 10),
-                              _hudText(
-                                '得分 ${state.score}',
-                                color: colors.primary,
-                              ),
-                              _hudText('距离 ${state.distance.floor()} m'),
-                              _hudText(
-                                '最高 ${state.highScore}',
-                                color: colors.onSurfaceVariant,
-                                fontSize: 12,
-                              ),
-                              _hudText(
-                                '小鱼 ${state.fish}',
-                                color: colors.onSurfaceVariant,
-                              ),
-                              if (state.combo > 1)
-                                _hudText(
-                                  '连击 ×${state.combo}',
-                                  color: colors.secondary,
-                                ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                    Consumer<GameProvider>(
-                      builder: (context, game, _) {
-                        final state = game.state;
-                        final chips = <Widget>[
-                          if (state.hasShield)
-                            _EffectChip(
-                              icon: Icons.shield_outlined,
-                              label: '护盾 ×${state.shieldCharges}',
-                              color: RideColors.shield,
-                            ),
-                          if (state.magnetActive)
-                            _EffectChip(
-                              icon: Icons.attractions,
-                              label: '磁铁 ${state.magnetRemaining.ceil()}s',
-                              color: RideColors.magnet,
-                            ),
-                        ];
-                        final showPause = game.isPlaying || game.isPaused;
-                        if (!showPause && chips.isEmpty) {
-                          return const SizedBox.shrink();
-                        }
-                        return _hudPanel(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (showPause)
-                                _circleNavButton(
-                                  game.isPaused
-                                      ? Icons.play_arrow
-                                      : Icons.pause,
-                                  game.togglePause,
-                                ),
-                              if (showPause && chips.isNotEmpty)
-                                const SizedBox(height: 10),
-                              ...chips,
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 8,
-            child: SafeArea(
-              top: false,
-              child: IgnorePointer(
-                child: Consumer<GameProvider>(
-                  builder: (context, game, _) {
-                    if (!game.isPlaying && !game.isPaused) {
-                      return const SizedBox.shrink();
-                    }
-                    return Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colors.surface.withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: colors.outline),
-                        ),
-                        child: Text(
-                          '点击跳跃（可二段跳）· 下滑俯身 · 右上角暂停',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: colors.onSurfaceVariant,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -472,7 +286,7 @@ class _GamePageState extends State<GamePage> {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: 0.86),
+        color: colors.surface.withValues(alpha: 0.84),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: colors.outline),
       ),
@@ -504,7 +318,7 @@ class _GamePageState extends State<GamePage> {
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: colors.surfaceContainerHighest,
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.9),
         border: Border.all(color: colors.outline),
       ),
       child: IconButton(

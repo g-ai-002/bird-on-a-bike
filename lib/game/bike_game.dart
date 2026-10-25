@@ -21,7 +21,8 @@ import 'components/sky_backdrop_component.dart';
 import 'components/speed_lines_component.dart';
 import 'components/vignette_component.dart';
 import 'components/wheel_spray_component.dart';
-import 'input/ride_input_component.dart';
+import 'cover_camera.dart';
+import 'input/ride_gesture_layer.dart';
 import 'ride_style.dart';
 import 'world_layout.dart';
 
@@ -33,10 +34,7 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
   BikeGame({required this.provider})
       : super(
           world: BikeWorld(),
-          camera: CameraComponent.withFixedResolution(
-            width: AppConstants.worldWidth,
-            height: AppConstants.worldHeight,
-          ),
+          camera: CameraComponent(),
         );
 
   static const String pauseOverlayId = 'pause';
@@ -53,13 +51,16 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
   late final DeathFlashComponent _flash;
   late final ScorePopupLayer _popups;
   late final WheelSprayComponent _spray;
-  late final RideInputComponent _input;
+  late final RideGestureLayer _gestures;
 
   final math.Random _random = math.Random();
   Vector2 _cameraBase = Vector2(
     AppConstants.worldWidth / 2,
     AppConstants.worldHeight / 2,
   );
+
+  /// 把 800×450 的世界铺满画布所需的缩放（cover）。
+  double _baseZoom = 1;
 
   bool _ready = false;
   GameStatus _lastStatus = GameStatus.idle;
@@ -95,11 +96,6 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
     _flash = DeathFlashComponent(provider: provider, priority: 60);
     _popups = ScorePopupLayer(color: RideColors.fish);
     _spray = WheelSprayComponent(provider: provider, priority: 9);
-    _input = RideInputComponent(
-      onJump: _onJump,
-      onDuck: _onDuckSwipe,
-      priority: 100,
-    );
 
     final scene = <Component>[
       SkyBackdropComponent(provider: provider, priority: -50),
@@ -111,15 +107,39 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
       _speedLines,
       _particles,
       _flash,
-      _input,
       _popups,
     ];
 
     await world.addAll(scene);
 
+    // 手势层挂在 viewport 上：画布任意位置都能收到点击、上滑与下滑，
+    // 且不受取景器 cover 缩放影响。
+    _gestures = RideGestureLayer(
+      onJump: _onJump,
+      onDuck: _onDuckSwipe,
+      priority: 100,
+    );
+    camera.viewport.add(_gestures);
+
+    _updateBaseZoom(size);
     camera.viewfinder.position = _cameraBase;
-    camera.viewfinder.zoom = 1;
+    camera.viewfinder.zoom = _baseZoom;
     _ready = true;
+  }
+
+  @override
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    _updateBaseZoom(size);
+    camera.viewfinder.position = _cameraBase;
+    camera.viewfinder.zoom = _baseZoom;
+  }
+
+  void _updateBaseZoom(Vector2 canvasSize) {
+    _baseZoom = coverZoom(
+      Size(canvasSize.x, canvasSize.y),
+      const Size(AppConstants.worldWidth, AppConstants.worldHeight),
+    );
   }
 
   @override
@@ -271,7 +291,7 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
       AppConstants.worldHeight / 2,
     );
     camera.viewfinder.position = _cameraBase;
-    camera.viewfinder.zoom = 1;
+    camera.viewfinder.zoom = _baseZoom;
     _countdownActive = false;
     countdown.value = 0;
     _lastTickValue = -1;
@@ -393,7 +413,7 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
   void _updateCamera(double dt) {
     _zoomPulse = math.max(0.0, _zoomPulse - dt / _zoomDuration);
     final eased = 1 - (1 - _zoomPulse) * (1 - _zoomPulse);
-    camera.viewfinder.zoom = 1 + _zoomStrength * eased;
+    camera.viewfinder.zoom = _baseZoom * (1 + _zoomStrength * eased);
 
     if (_shakeRemaining > 0) {
       _shakeRemaining = math.max(0.0, _shakeRemaining - dt);
