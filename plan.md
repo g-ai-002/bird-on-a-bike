@@ -22,6 +22,7 @@
 - [x] 深色 / 浅色主题与程序化音效
 - [x] 日志系统（按日落盘到用户目录 `logs/`）
 - [x] 固定机位 3D 低多边形场景（flutter_scene + Flutter GPU）
+- [x] 玩法坐标迁移到 3D 世界空间，移除 2D 回退渲染
 - [x] 双流水线构建与发布（GitHub Actions / Gitea Actions）
 - [ ] 更多场景主题：清晨薄雾、夜晚灯塔、雨天路滑
 - [ ] 更多障碍组合：连续礁石、双层横幅、移动海鸥
@@ -38,9 +39,23 @@
 
 ## 版本历史
 
-### v0.3.0 (MINOR) — 当前开发中
+### v0.4.0 (MINOR) — 当前开发中
 
-- **状态**: 本地 `flutter analyze` / `flutter test` 通过（待 CI 发布验证）
+- **状态**: 本机无 Flutter CLI，`flutter analyze` / `flutter test` 未运行（待 CI）
+- **目标**: 把游戏整体整改为 3D：玩法坐标 3D 化、删除 2D 回退渲染、相机随速度与跳跃变化
+- **任务**:
+  - [x] 新增 `WorldLayout`：世界单位、骑行线、生成位置与屏幕投影
+  - [x] 规则层改用世界坐标：障碍与拾取物带上 z 深度，距离按米累计
+  - [x] 碰撞改为 x / y / z 三轴包围盒，含深度错位判定
+  - [x] 3D 相机随车速后拉、跟随跳跃，保留撞击震动与缩放
+  - [x] 删除 2D 回退组件与 `SceneUnits`；GPU 不可用时提示设备不支持
+  - [x] 更新单元测试（碰撞、生成、坐标与实体模型）
+  - [x] 版本号 0.3.0 → 0.4.0
+  - [x] 更新 README / plan / versions
+
+### v0.3.0 (MINOR)
+
+- **状态**: 已发布 ✅
 - **目标**: 用 flutter_scene 把画面改造成固定机位的低多边形 3D 场景
 - **任务**:
   - [x] 引入 flutter_scene 0.24.3，Android manifest 与 Windows runner 开启 Flutter GPU
