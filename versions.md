@@ -21,19 +21,19 @@
 
 ## 项目基础信息
 
-| 项目                                      | 版本                               |
-|-------------------------------------------|------------------------------------|
-| 应用版本 (`pubspec.yaml`)                 | 0.5.0                              |
-| 应用内版本号 (`lib/utils/constants.dart`) | 0.5.0                              |
-| Flutter SDK（CI 固定版本）                | 3.47.7                             |
-| Dart SDK 约束                             | >=3.13.5 <4.0.0                    |
-| compileSdk / targetSdk                    | 37.2 / 37                          |
-| minSdk                                    | 35                                 |
-| NDK                                       | 30.0.16248370                      |
-| Java (source/target)                      | 21                                 |
-| 目标平台                                  | Android (arm64-v8a)、Windows (x64) |
+| 项目                                      | 版本                                                   |
+|-------------------------------------------|--------------------------------------------------------|
+| 应用版本 (`pubspec.yaml`)                 | 0.5.0                                                  |
+| 应用内版本号 (`lib/utils/constants.dart`) | 0.5.0                                                  |
+| Flutter SDK（CI 固定版本）                | 3.47.7                                                 |
+| Dart SDK 约束                             | >=3.13.5 <4.0.0                                        |
+| compileSdk / targetSdk                    | 37.2 / 37                                              |
+| minSdk                                    | 35                                                     |
+| NDK                                       | 30.0.16248370                                          |
+| Java (source/target)                      | 21                                                     |
+| 目标平台                                  | Android (arm64-v8a)、Windows (x64)、Web (GitHub Pages) |
 
-发布产物：Android APK（`android-arm64`）与 Windows ZIP（`windows-x86_64`），由 GitHub Actions 与 Gitea Actions 双流水线构建。
+发布产物：Android APK（`android-arm64`）、Windows ZIP（`windows-x86_64`）、Web 站点（`gh-pages`，每个 tag 一个子目录），由 GitHub Actions 与 Gitea Actions 双流水线构建。
 
 ---
 

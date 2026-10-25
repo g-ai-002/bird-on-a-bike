@@ -1,7 +1,7 @@
 # 鹈鹕骑单车 🚴
 
 一只鹈鹕骑着单车沿海岸线疾驰的 2.5D 躲避小游戏，基于 Flutter 与 Flame
-开发，支持 Android 与 Windows 双平台。玩法坐标、碰撞与计分都在世界空间
+开发，支持 Android、Windows 与 Web 三平台。玩法坐标、碰撞与计分都在世界空间
 （10 单位 = 1 米）中计算，画面用固定机位的等距投影、程序化精灵与多层视差
 滚动来呈现海岸公路的纵深，不再依赖 Flutter GPU 或 flutter_scene。
 
@@ -40,12 +40,14 @@
 - 📱 手机进入游玩页自动锁定横屏并沉浸全屏，返回后恢复原方向
 - 🖥️ 手机、折叠屏、平板与桌面自适应布局
 - 🌐 简体中文界面
+- 🕹️ Web 版：发布 tag 自动构建并部署到 GitHub Pages，每个 tag 一个独立版本
 
 ## 操作
 
 | 平台    | 跳跃         | 二段跳       | 俯身         | 暂停       |
 |---------|--------------|--------------|--------------|------------|
 | Windows | 空格 / ↑ / W | 空中再按一次 | ↓ / S / Ctrl | P / Esc    |
+| Web     | 空格 / ↑ / W | 空中再按一次 | ↓ / S        | P / Esc    |
 | Android | 点击 / 上滑  | 空中再点一次 | 向下滑动     | 右上角暂停 |
 
 手机进入游玩页会自动切换到横屏并隐藏系统栏，画布铺满整屏；点击与滑动在
@@ -57,8 +59,20 @@
 
 - Android APK（arm64-v8a）
 - Windows ZIP（x86-64）
+- Web 版（GitHub Pages，浏览器直接试玩）
 
 发布后可在仓库的 Releases 页面下载对应产物。
+
+### 在线试玩
+
+推送到 GitHub 的每个 `v*` tag 都会额外构建 Web 版并发布到 GitHub Pages，
+各版本互不覆盖，历史版本长期保留：
+
+- 版本列表：<https://g-ai-002.github.io/bird-on-a-bike/>
+- 当前版本：<https://g-ai-002.github.io/bird-on-a-bike/v0.5.0/>
+
+Pages 首次使用需在仓库 Settings → Pages 里把发布来源设为 `gh-pages` 分支的
+根目录；之后每次推送 tag 都会自动更新站点（含版本索引页与 `versions.json`）。
 
 ## 开发
 
@@ -67,6 +81,7 @@
 - Flutter 3.47.7+（内置 Dart 3.13.5+）
 - Android SDK 37+（minSdk 35）
 - Windows 10+
+- 浏览器（Chrome / Edge / Safari 均可运行 Web 版）
 
 ### 运行
 
@@ -76,10 +91,17 @@ flutter run
 ```
 
 Android 与 Windows 使用同一套 Flame 渲染，无需开启 Flutter GPU，也不再需要
-平台侧的额外开关。Windows 平台文件不入库，首次本地构建前先执行：
+平台侧的额外开关。Windows 与 Web 平台文件不入库，首次本地构建前先执行：
 
 ```bash
-flutter create --platforms=windows --project-name bird_on_a_bike .
+flutter create --platforms=windows,web --project-name bird_on_a_bike .
+```
+
+浏览器里预览与构建 Web 版（`--base-href` 需与线上路径一致，否则资源 404）：
+
+```bash
+flutter run -d chrome
+flutter build web --release --base-href /bird-on-a-bike/v0.5.0/
 ```
 
 ### 渲染结构
@@ -104,20 +126,26 @@ flutter test
 
 ### 发布
 
-推送 `v*` 标签会触发 GitHub Actions 与 Gitea Actions 双流水线，分别构建 Android APK
-与 Windows ZIP，并在对应平台创建 Release：
+推送 `v*` 标签会触发 GitHub Actions 与 Gitea Actions 双流水线：
+
+- GitHub Actions：Android APK、Windows ZIP、Web 版（发布到 GitHub Pages），并创建 GitHub Release
+- Gitea Actions：Android APK、Windows ZIP，并创建 Gitea Release
 
 ```bash
 git tag v0.5.0
 git push origin v0.5.0
 ```
 
+Web 版按 tag 分目录保存在 `gh-pages` 分支（`v0.5.0/`、`v0.4.0/` …），根目录的
+版本索引页由 `.github/pages/index.template.html` 渲染，每次发布都会重新生成版本列表；
+同一时刻只允许一个 Web 发布任务写 `gh-pages`，避免并发覆盖。
+
 应用内版本号位于 `lib/utils/constants.dart` 的 `AppConstants.version`，发版时需与
 `pubspec.yaml` 的 `version` 同步。
 
 ## 技术栈
 
-- Flutter 3.47.7
+- Flutter 3.47.7（Android / Windows / Web）
 - Flame 1.38.2（游戏主循环、组件树、3D 装饰器、输入与遮罩）
 - 自绘 Canvas 精灵（程序化低多边形画法 + `Picture` 烘焙）
 - Provider 状态管理
@@ -125,6 +153,8 @@ git push origin v0.5.0
 - SharedPreferences 持久化
 - audioplayers 音效播放
 - window_manager 桌面窗口管理
+- 条件导入隔离平台能力：`dart:io`、`path_provider`、`window_manager` 只进 IO 实现
+- GitHub Pages 多版本站点：每个 tag 一个子目录，根目录自动生成版本索引
 
 ## 许可证
 

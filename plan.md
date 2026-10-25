@@ -2,7 +2,7 @@
 
 ## 长期目标
 
-- 跨 Android + Windows 双平台的海岸骑行躲避游戏
+- 跨 Android + Windows + Web 三平台的海岸骑行躲避游戏
 - 保持轻量：单局 1~3 分钟，随时开一局，随时停下
 - 手感优先：跳跃、二段跳、俯身与碰撞判定都要清晰可预期
 - 视觉统一：低多边形鹈鹕 + 黄昏海岸，界面克制、排版简洁
@@ -24,6 +24,7 @@
 - [x] 固定机位 2.5D 等距场景（Flame 精灵烘焙 + 3D 装饰器 + 视差滚动）
 - [x] 玩法坐标迁移到 3D 世界空间，移除 2D 回退渲染
 - [x] 双流水线构建与发布（GitHub Actions / Gitea Actions）
+- [x] Web 版发布：GitHub Actions 构建 Web 产物，GitHub Pages 按 tag 多版本共存
 - [ ] 更多场景主题：清晨薄雾、夜晚灯塔、雨天路滑
 - [ ] 更多障碍组合：连续礁石、双层横幅、移动海鸥
 - [ ] 成就系统与每日挑战
@@ -72,6 +73,9 @@
   - [x] 海面远景偶尔有鱼跃出水面，位置远离近岸沙滩
   - [x] 首页滚动视图铺满整页，滚动条贴到窗口最右侧
   - [x] 玩法提示补齐上滑跳跃，脚踏板加大、眼珠朝向前方
+  - [x] Web 适配：条件导入隔离 `dart:io` / `path_provider` / `window_manager`，Web 端日志走内存
+  - [x] GitHub Actions 新增 Web 构建，按 tag 发布到 `gh-pages` 的子目录，历史版本共存
+  - [x] 版本索引页模板 `.github/pages/index.template.html` 与 `versions.json` 自动生成
   - [x] 版本号 0.4.0 → 0.5.0
   - [x] 更新 README / plan / versions
 
