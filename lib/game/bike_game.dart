@@ -16,6 +16,7 @@ import 'components/particle_burst_component.dart';
 import 'components/ride_entities_component.dart';
 import 'components/road_component.dart';
 import 'components/score_popup_layer.dart';
+import 'components/sea_life_component.dart';
 import 'components/shore_foreground_component.dart';
 import 'components/sky_backdrop_component.dart';
 import 'components/speed_lines_component.dart';
@@ -99,6 +100,7 @@ class BikeGame extends FlameGame<BikeWorld> with KeyboardEvents {
 
     final scene = <Component>[
       SkyBackdropComponent(provider: provider, priority: -50),
+      SeaLifeComponent(provider: provider, priority: -45),
       RoadComponent(provider: provider, priority: -40),
       RideEntitiesComponent(provider: provider, priority: 0),
       ShoreForegroundComponent(provider: provider, priority: 6),
