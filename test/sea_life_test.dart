@@ -7,11 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'fakes/fake_storage.dart';
 
 void main() {
-  testWidgets('渔夫划船与跃出水面的鱼可以完成渲染', (tester) async {
+  testWidgets('远处跃出水面的鱼可以完成渲染', (tester) async {
     final game = GameProvider(FakeStorageService.create(), audioEnabled: false);
     game.start();
     final sea = SeaLifeComponent(provider: game, priority: -45);
-    // 推进到多个跃鱼周期，同时覆盖划船与溅水两种画面。
+    // 推进到多个跃鱼周期，覆盖跃起与溅水画面。
     for (var i = 0; i < 14; i++) {
       sea.update(0.6);
     }
