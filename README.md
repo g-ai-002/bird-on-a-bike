@@ -2,7 +2,7 @@
 
 一只鹈鹕骑着单车沿海岸线疾驰的 2.5D 躲避小游戏，基于 Flutter 与 Flame
 开发，支持 Android 与 Windows 双平台。玩法坐标、碰撞与计分都在世界空间
-（10 单位 = 1 米）中计算，画面用固定机位的等距投影、精灵堆叠与多层视差
+（10 单位 = 1 米）中计算，画面用固定机位的等距投影、程序化精灵与多层视差
 滚动来呈现海岸公路的纵深，不再依赖 Flutter GPU 或 flutter_scene。
 
 ## 玩法
@@ -18,7 +18,7 @@
 ## 功能
 
 - 🧊 固定机位 2.5D：等距路面 + 侧视角色，前进方向保持水平
-- 🧱 精灵堆叠：低多边形道具与鹈鹕按多层压暗的切片叠出体积感
+- 🧱 单层精灵：低多边形道具与椰树烘焙成一张 `Picture`，每帧只画一次
 - 🎞️ 3D 装饰器：骑行者套 `Rotate3DDecorator`，带轻微偏航与透视
 - 🌅 多层视差：云、远山、海浪、路面与近景草丛按不同倍率滚动
 - 🖼️ 画布铺满：Flame 画布填满整个页面，HUD 按钮与计分悬浮在地图之上
@@ -93,7 +93,7 @@ flutter create --platforms=windows --project-name bird_on_a_bike .
 | 特效 | `SpeedLines` / `WheelSpray` / `Vignette` 等 | 屏幕空间速度线、水雾、暗角与粒子 |
 
 世界坐标约定与投影见 `lib/game/world_layout.dart`、`lib/game/iso_projection.dart`；
-道具画法与精灵堆叠见 `lib/game/painting/`、`lib/game/rendering/`。
+道具画法与精灵烘焙见 `lib/game/painting/`、`lib/game/rendering/`。
 
 ### 测试与静态检查
 
@@ -119,7 +119,7 @@ git push origin v0.5.0
 
 - Flutter 3.47.7
 - Flame 1.38.2（游戏主循环、组件树、3D 装饰器、输入与遮罩）
-- 自绘 Canvas 精灵（程序化低多边形画法 + 精灵堆叠烘焙）
+- 自绘 Canvas 精灵（程序化低多边形画法 + `Picture` 烘焙）
 - Provider 状态管理
 - Material 3 设计
 - SharedPreferences 持久化
