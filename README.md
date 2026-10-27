@@ -61,7 +61,7 @@
 
 - Android APK（arm64-v8a）
 - Windows ZIP（x86-64）
-- Web 版（GitHub Pages，浏览器直接试玩）
+- Web 版（GitHub Pages 在线试玩；Gitea Release 另附 `-web.zip` 归档）
 
 发布后可在仓库的 Releases 页面下载对应产物。
 
@@ -139,7 +139,8 @@ flutter test
 推送 `v*` 标签会触发 GitHub Actions 与 Gitea Actions 双流水线：
 
 - GitHub Actions：Android APK、Windows ZIP、Web 版（发布到 GitHub Pages 并把 `-web.zip` 归档到 Release），并创建 GitHub Release
-- Gitea Actions：Android APK、Windows ZIP，并创建 Gitea Release
+- Gitea Actions：Android APK、Windows ZIP、Web ZIP（Gitea 没有 Pages，Web 版只打包成
+  `-web.zip` 归档到 Release），并创建 Gitea Release
 
 ```bash
 git tag v0.7.0
