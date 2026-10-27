@@ -71,6 +71,8 @@
 各版本互不覆盖，历史版本长期保留：
 
 - 版本列表：<https://g-ai-002.github.io/bird-on-a-bike/>
+  （首页顶部是最新正式版本的醒目入口，点开即玩；下方分「正式版本」与
+  「调试版本」两列，历史正式版本从新到旧排列）
 - 当前版本：<https://g-ai-002.github.io/bird-on-a-bike/v0.7.0/>
 - 预览版：<https://g-ai-002.github.io/bird-on-a-bike/debug/>
 
@@ -145,7 +147,9 @@ git push origin v0.7.0
 ```
 
 Web 版按 tag 分目录保存在 `gh-pages` 分支（`v0.7.0/`、`v0.6.0/` …），根目录的
-版本索引页由 `.github/pages/index.template.html` 渲染，每次发布都会重新生成版本列表；
+版本索引页由 `.github/pages/index.template.html` 渲染，每次发布都会重新生成：
+顶部是最新正式版本的醒目入口，点开即玩；下方左列「正式版本」按从新到旧列出
+全部历史 tag，右列「调试版本」只放一条 `debug` 预览；
 非 tag 运行（手动触发）写入 `debug/` 目录、不碰已有版本，同一时刻只允许一个
 Web 发布任务写 `gh-pages`，避免并发覆盖。
 

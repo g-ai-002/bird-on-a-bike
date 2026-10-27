@@ -385,23 +385,53 @@ jobs:
           now=$(date -u '+%Y-%m-%d %H:%M UTC')
           echo "📌 正式版本 ${#versions[@]} 个（最新 ${latest:-无}），debug 预览: ${has_debug}"
 
-          : > /tmp/version-items.html
-          if [ "$has_debug" = true ]; then
-            printf '      <a class="card" href="./debug/"><span class="ver">debug<span class="badge badge-debug">预览</span></span><span class="go">最新一次构建 →</span></a>\n' \
-              >> /tmp/version-items.html
+          # 顶部醒目入口：优先指向最新正式版本，尚无正式版本时退回 debug
+          : > /tmp/latest.html
+          if [ -n "$latest" ]; then
+            printf '    <a class="hero" href="./%s/">\n      <span class="hero-label">最新正式版本</span>\n      <span class="hero-ver">%s</span>\n      <span class="hero-go">▶ 立即开始游戏</span>\n    </a>\n' \
+              "$latest" "$latest" >> /tmp/latest.html
+          elif [ "$has_debug" = true ]; then
+            printf '    <a class="hero" href="./debug/">\n      <span class="hero-label">暂无正式版本 · 先玩调试版</span>\n      <span class="hero-ver">debug</span>\n      <span class="hero-go">▶ 立即开始游戏</span>\n    </a>\n' \
+              >> /tmp/latest.html
           fi
+
+          # 左列：全部正式版本，从新到旧
+          : > /tmp/release-items.html
           for i in "${!versions[@]}"; do
             v="${versions[$i]}"
             badge=""
             if [ "$i" -eq 0 ]; then badge='<span class="badge">最新</span>'; fi
-            printf '      <a class="card" href="./%s/"><span class="ver">%s%s</span><span class="go">进入试玩 →</span></a>\n' \
-              "$v" "$v" "$badge" >> /tmp/version-items.html
+            printf '        <a class="card" href="./%s/"><span class="ver">%s%s</span><span class="go">进入试玩 →</span></a>\n' \
+              "$v" "$v" "$badge" >> /tmp/release-items.html
           done
+          if [ "${#versions[@]}" -eq 0 ]; then
+            printf '        <p class="empty">暂无正式版本</p>\n' >> /tmp/release-items.html
+          fi
 
-          awk -v title="$app_title" -v repo="${{ github.repository }}" -v updated="$now" -v items="/tmp/version-items.html" '
-            /__VERSIONS__/ {
-              while ((getline line < items) > 0) print line;
-              close(items);
+          # 右列：仅一条 debug 记录
+          : > /tmp/debug-items.html
+          if [ "$has_debug" = true ]; then
+            printf '        <a class="card" href="./debug/"><span class="ver">debug<span class="badge badge-debug">预览</span></span><span class="go">最新一次构建 →</span></a>\n' \
+              >> /tmp/debug-items.html
+          else
+            printf '        <p class="empty">暂无调试版本</p>\n' >> /tmp/debug-items.html
+          fi
+
+          awk -v title="$app_title" -v repo="${{ github.repository }}" -v updated="$now" \
+              -v latest="/tmp/latest.html" -v releases="/tmp/release-items.html" -v debugf="/tmp/debug-items.html" '
+            /__LATEST__/ {
+              while ((getline line < latest) > 0) print line;
+              close(latest);
+              next
+            }
+            /__RELEASES__/ {
+              while ((getline line < releases) > 0) print line;
+              close(releases);
+              next
+            }
+            /__DEBUG__/ {
+              while ((getline line < debugf) > 0) print line;
+              close(debugf);
               next
             }
             { gsub(/__TITLE__/, title); gsub(/__REPO__/, repo); gsub(/__UPDATED__/, updated); print }
