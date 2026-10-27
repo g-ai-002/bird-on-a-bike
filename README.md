@@ -154,6 +154,9 @@ Web 版按 tag 分目录保存在 `gh-pages` 分支（`v0.7.0/`、`v0.6.0/` …�
 非 tag 运行（手动触发）写入 `debug/` 目录、不碰已有版本，同一时刻只允许一个
 Web 发布任务写 `gh-pages`，避免并发覆盖。
 
+Gitea Release 里的 `-web.zip` 用默认根路径构建，解压后在目录内起静态服务器
+（如 `python -m http.server`）即可访问，不做在线托管。
+
 应用内版本号位于 `lib/utils/constants.dart` 的 `AppConstants.version`，发版时需与
 `pubspec.yaml` 的 `version` 同步。
 

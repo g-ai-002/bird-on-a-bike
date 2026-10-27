@@ -267,8 +267,8 @@ jobs:
       - name: 🔨 构建 Web 产物
         run: |
           set -euo pipefail
-          # 相对 base href：解压后放在任意目录下用静态服务器打开都能跑
-          flutter build web --release --base-href ./
+          # 归档用默认根路径 base href：解压后在目录内起静态服务器即可访问
+          flutter build web --release
           du -sh build/web
 
       - name: 🗜️ 打包 Web 产物
