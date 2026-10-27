@@ -25,6 +25,7 @@ class RideColors {
   static const pelicanShade = Color(0xFFE6D8C4);
   static const beak = Color(0xFFFFA940);
   static const pouch = Color(0xFFFFC46B);
+  static const mouth = Color(0xFF6E2412);
   static const leg = Color(0xFFFF9F43);
   static const scarf = Color(0xFF2BA7A0);
   static const eye = Color(0xFF1B2527);

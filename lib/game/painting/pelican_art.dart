@@ -13,6 +13,9 @@ class RideLook {
   final bool shield;
   final bool magnet;
 
+  /// 张嘴程度：0 完全闭合，1 张到最大，吃小鱼时短暂打开。
+  final double mouthOpen;
+
   const RideLook({
     this.wheelAngle = 0,
     this.wingPhase = 0,
@@ -20,6 +23,7 @@ class RideLook {
     this.airborne = false,
     this.shield = false,
     this.magnet = false,
+    this.mouthOpen = 0,
   });
 }
 
@@ -59,6 +63,7 @@ void paintPelicanRider(Canvas canvas, Size size, RideLook look) {
   paintRiderCranks(canvas, look);
   paintRiderLegs(canvas, look);
   paintRiderBodyStatic(canvas, ducking: look.ducking);
+  paintRiderBeak(canvas, look);
   paintRiderWing(canvas, look);
   paintRiderScarf(canvas, look);
   paintRiderPedals(canvas, look);
@@ -184,9 +189,10 @@ void paintRiderCranks(Canvas canvas, RideLook look) {
   _paintCrankArms(canvas, _crankCenter, look.wheelAngle);
 }
 
-/// 鹈鹕静态层：尾、身体、脖子、头、喙与眼睛。
+/// 鹈鹕静态层：尾、身体、脖子、头与眼睛。
 ///
-/// 只与站姿/俯身两种姿态有关，因此每种姿态烘焙一张。
+/// 只与站姿/俯身两种姿态有关，因此每种姿态烘焙一张；喙与喉囊会随
+/// 吃鱼张嘴动画变化，由 [paintRiderBeak] 每帧单独绘制。
 void paintRiderBodyStatic(Canvas canvas, {required bool ducking}) {
   final bodyCenter = _bodyCenterFor(ducking);
   final bodyRadius = _bodyRadiusFor(ducking);
@@ -220,8 +226,6 @@ void paintRiderBodyStatic(Canvas canvas, {required bool ducking}) {
     headRadius,
     Paint()..color = RideColors.pelican,
   );
-
-  _paintBeak(canvas, _beakBaseFor(ducking), _beakTipFor(ducking), ducking);
 
   final eyeCenter = headCenter + const Offset(4.5, -3.2);
   canvas.drawCircle(eyeCenter, 2.6, Paint()..color = RideColors.eye);
@@ -438,16 +442,60 @@ void _paintNeck(
 
 double headRadiusOffset(bool ducking) => ducking ? 6.0 : 8.0;
 
+/// 吃鱼张嘴动画的时长（秒）：开口由 0 张到最大再合拢。
+const double kEatMouthSeconds = 0.34;
+
+/// 按动画剩余时间换算张嘴程度：0 完全闭合，1 张到最大。
+double eatMouthOpen(double remaining) {
+  if (remaining <= 0 || remaining >= kEatMouthSeconds) return 0;
+  final progress = 1 - remaining / kEatMouthSeconds;
+  return math.sin(progress * math.pi);
+}
+
+/// 喙与喉囊：张嘴时上下颌绕嘴角旋开，露出深色口腔。
+void paintRiderBeak(Canvas canvas, RideLook look) {
+  _paintBeak(
+    canvas,
+    _beakBaseFor(look.ducking),
+    _beakTipFor(look.ducking),
+    look.ducking,
+    look.mouthOpen.clamp(0.0, 1.0),
+  );
+}
+
 void _paintBeak(
   Canvas canvas,
   Offset base,
   Offset tip,
   bool ducking,
+  double open,
 ) {
   final upper = Paint()..color = RideColors.beak;
   final pouch = Paint()..color = RideColors.pouch;
   final span = tip.dx - base.dx;
   final depth = ducking ? 24.0 : 21.0;
+  final jawAngle = open * (ducking ? 0.22 : 0.28);
+
+  // 张口时先铺一层深色口腔，上下颌旋开后露出的就是它。
+  if (open > 0.01) {
+    final mouthPath = Path()
+      ..moveTo(base.dx + 3, base.dy)
+      ..quadraticBezierTo(
+        base.dx + span * 0.5,
+        base.dy + 3 + depth * 0.55 * open,
+        tip.dx - 5,
+        tip.dy + 2,
+      )
+      ..lineTo(tip.dx - 7, tip.dy - 2 - 3 * open)
+      ..quadraticBezierTo(
+        base.dx + span * 0.45,
+        base.dy - 1 - 4 * open,
+        base.dx + 3,
+        base.dy - 3,
+      )
+      ..close();
+    canvas.drawPath(mouthPath, Paint()..color = RideColors.mouth);
+  }
 
   final upperPath = Path()
     ..moveTo(base.dx, base.dy - 4)
@@ -465,9 +513,16 @@ void _paintBeak(
       base.dy + 5,
     )
     ..close();
-  canvas.drawPath(upperPath, upper);
 
-  // 夸张的下颌喉囊：从嘴角一路垂到接近车轮的高度。
+  // 上颌绕嘴角上抬。
+  canvas.save();
+  canvas.translate(base.dx, base.dy);
+  canvas.rotate(-jawAngle);
+  canvas.translate(-base.dx, -base.dy);
+  canvas.drawPath(upperPath, upper);
+  canvas.restore();
+
+  // 夸张的下颌喉囊：从嘴角一路垂到接近车轮的高度，张口时向下荡开。
   final pouchPath = Path()
     ..moveTo(base.dx + 2, base.dy + 3)
     ..quadraticBezierTo(
@@ -479,13 +534,24 @@ void _paintBeak(
     ..lineTo(tip.dx - 2, tip.dy + 1)
     ..lineTo(base.dx + 3, base.dy + 5)
     ..close();
+  canvas.save();
+  canvas.translate(base.dx, base.dy);
+  canvas.rotate(jawAngle * 1.25);
+  canvas.translate(-base.dx, -base.dy);
   canvas.drawPath(pouchPath, pouch);
+  canvas.restore();
 
   final line = Paint()
     ..color = const Color(0xFFD97A1E)
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1.6
     ..strokeCap = StrokeCap.round;
+
+  // 喙缝与鼻孔属于上颌，跟随它一起旋开。
+  canvas.save();
+  canvas.translate(base.dx, base.dy);
+  canvas.rotate(-jawAngle);
+  canvas.translate(-base.dx, -base.dy);
   canvas.drawPath(
     Path()
       ..moveTo(base.dx + 2, base.dy + 1)
@@ -502,6 +568,7 @@ void _paintBeak(
     1.3,
     Paint()..color = const Color(0xFFD97A1E).withValues(alpha: 0.55),
   );
+  canvas.restore();
 }
 
 void _paintLegs(Canvas canvas, Offset hip, RideLook look) {

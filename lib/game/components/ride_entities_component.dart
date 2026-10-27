@@ -63,6 +63,12 @@ class RideEntitiesComponent extends SceneLayerComponent {
   double _wheelAngle = 0;
   double _wingPhase = 0;
 
+  /// 吃鱼张嘴动画的剩余时间；每次拾取小鱼重置为 [kEatMouthSeconds]。
+  double _eatRemaining = 0;
+
+  /// 上一帧的小鱼数量，用来判断本帧是否刚吃到鱼。
+  int _fishSeen = 0;
+
   @override
   void onLoad() {
     _bikePicture = _recordRiderLayer(paintRiderBikeStatic);
@@ -159,11 +165,25 @@ class RideEntitiesComponent extends SceneLayerComponent {
   void update(double dt) {
     super.update(dt);
     final state = provider.state;
+    _trackEating(state.fish, dt);
     if (!state.isPlaying) return;
     _elapsed += dt;
     // 车轮向右滚动：画面坐标 y 向下，角度递增即顺时针。
     _wheelAngle += state.speed * IsoProjection.pxPerUnit * dt / 24;
     _wingPhase += dt * (state.rider.airborne ? 13.0 : 5.5);
+  }
+
+  /// 小鱼数量增加时开始一次张嘴动画；重开一局（数量归零）时清掉残留。
+  void _trackEating(int fish, double dt) {
+    if (fish > _fishSeen) {
+      _eatRemaining = kEatMouthSeconds;
+    } else if (fish < _fishSeen) {
+      _eatRemaining = 0;
+    }
+    _fishSeen = fish;
+    if (_eatRemaining > 0) {
+      _eatRemaining = math.max(0.0, _eatRemaining - dt);
+    }
   }
 
   @override
@@ -297,6 +317,7 @@ class RideEntitiesComponent extends SceneLayerComponent {
       airborne: state.rider.airborne,
       shield: state.hasShield,
       magnet: state.magnetActive,
+      mouthOpen: eatMouthOpen(_eatRemaining),
     );
     final ground = IsoProjection.project(
       WorldLayout.riderX,
@@ -320,6 +341,7 @@ class RideEntitiesComponent extends SceneLayerComponent {
       _riderSprites.drawCranks(tilted, _wheelAngle);
       _riderSprites.drawLegs(tilted, _wheelAngle, ducking: look.ducking);
       tilted.drawPicture(look.ducking ? _pelicanDuck : _pelicanStand);
+      paintRiderBeak(tilted, look);
       paintRiderWing(tilted, look);
       paintRiderScarf(tilted, look);
       _riderSprites.drawPedals(tilted, _wheelAngle);

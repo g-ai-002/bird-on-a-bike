@@ -47,4 +47,41 @@ void main() {
     image.dispose();
     picture.dispose();
   });
+
+  test('吃鱼张嘴程度先开后合', () {
+    expect(eatMouthOpen(0), 0);
+    expect(eatMouthOpen(kEatMouthSeconds), 0);
+    expect(eatMouthOpen(kEatMouthSeconds / 2), closeTo(1, 1e-9));
+    expect(
+      eatMouthOpen(kEatMouthSeconds * 0.75),
+      lessThan(eatMouthOpen(kEatMouthSeconds * 0.5)),
+    );
+  });
+
+  testWidgets('张嘴时鹈鹕喙部画面与闭嘴不同', (tester) async {
+    // 像素回读依赖真实异步，需放在 runAsync 里，否则会卡在 toByteData。
+    final closed = await tester.runAsync(
+      () => _renderRiderPixels(const RideLook(wheelAngle: 0.4)),
+    );
+    final open = await tester.runAsync(
+      () => _renderRiderPixels(const RideLook(wheelAngle: 0.4, mouthOpen: 1)),
+    );
+    expect(open, isNot(equals(closed)));
+  });
+}
+
+/// 把一帧骑行者渲染成原始像素，用于比较不同姿态的画面差异。
+Future<List<int>> _renderRiderPixels(RideLook look) async {
+  final recorder = PictureRecorder();
+  final canvas = Canvas(recorder);
+  paintPelicanRider(canvas, kRiderArtSize, look);
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(
+    kRiderArtSize.width.round(),
+    kRiderArtSize.height.round(),
+  );
+  final bytes = await image.toByteData();
+  image.dispose();
+  picture.dispose();
+  return bytes!.buffer.asUint8List();
 }
