@@ -88,7 +88,7 @@ Pages 首次使用需在仓库 Settings → Pages 里把发布来源设为 `gh-p
 
 ### 环境要求
 
-- Flutter 3.47.7+（内置 Dart 3.13.5+）
+- Flutter 3.47.8+（内置 Dart 3.13.7+）
 - Android SDK 37+（minSdk 35）
 - Windows 10+
 - 浏览器（Chrome / Edge / Safari 均可运行 Web 版）
@@ -163,7 +163,7 @@ Gitea Release 里的 `-web.zip` 用默认根路径构建，解压后在目录内
 
 ## 技术栈
 
-- Flutter 3.47.7（Android / Windows / Web）
+- Flutter 3.47.8（Android / Windows / Web）
 - Flame 1.38.2（游戏主循环、组件树、3D 装饰器、输入与遮罩）
 - 自绘 Canvas 精灵（程序化低多边形画法 + `Picture` 烘焙）
 - Provider 状态管理
