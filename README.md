@@ -69,7 +69,7 @@
 ### 在线试玩
 
 推送到 GitHub 的每个 `v*` tag 都会额外构建 Web 版并发布到 GitHub Pages，
-各版本互不覆盖，历史版本长期保留：
+站点只保留最近 3 个 MINOR 版本（每个 MINOR 取最新一次发布）：
 
 - 版本列表：<https://g-ai-002.github.io/bird-on-a-bike/>
   （首页顶部是最新正式版本的醒目入口，点开即玩；下方分「正式版本」与
@@ -82,7 +82,8 @@
 `<仓库名>-<版本>-web.zip` 一并归档到 GitHub Release，与 APK、Windows ZIP 放在一起。
 
 Pages 首次使用需在仓库 Settings → Pages 里把发布来源设为 `gh-pages` 分支的
-根目录；之后每次推送 tag 都会自动更新站点（含版本索引页与 `versions.json`）。
+根目录；之后每次推送 tag 都会自动更新站点（含版本索引页与 `versions.json`），
+`gh-pages` 每次发布都压缩成一次提交，分支体积不随版本累积。
 
 ## 开发
 
@@ -151,7 +152,7 @@ git push origin v0.8.0
 Web 版按 tag 分目录保存在 `gh-pages` 分支（`v0.8.0/`、`v0.7.0/` …），根目录的
 版本索引页由 `.github/pages/index.template.html` 渲染，每次发布都会重新生成：
 顶部是最新正式版本的醒目入口，点开即玩；下方左列「正式版本」按从新到旧列出
-全部历史 tag，右列「调试版本」只放一条 `debug` 预览；
+保留的正式版本（最近 3 个 MINOR），右列「调试版本」只放一条 `debug` 预览；
 非 tag 运行（手动触发）写入 `debug/` 目录、不碰已有版本，同一时刻只允许一个
 Web 发布任务写 `gh-pages`，避免并发覆盖。
 
